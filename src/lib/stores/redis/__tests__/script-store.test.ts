@@ -4,9 +4,9 @@ import type { ScriptCommands } from "#lib/stores/redis/script-store.ts"
 import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
 import { memoryStore } from "#lib/stores/memory/memory-store.ts"
 import { InvalidReplyError, scriptStore } from "#lib/stores/redis/script-store.ts"
+import { testScriptReload, url } from "./server.ts"
 
 // Tests the scripts themselves, through ioredis. CI runs this file against Redis and Valkey.
-const url = process.env.REDIS_URL ?? "redis://localhost:6379"
 const week = 7 * 24 * 60 * 60 * 1000
 
 function sleep(ms: number) {
@@ -54,17 +54,10 @@ describe("scriptStore", () => {
     }
   })
 
-  it("reloads its scripts after the server forgets them", async () => {
-    const store = scriptStore(commands)
-    const algorithm = fixedWindow({ limit: 5, window: 2000 })
-    await store.consume({ algorithm, cost: 1, key: "test:flush" })
-
-    await client.script("FLUSH")
-
-    expect(await store.consume({ algorithm, cost: 0, key: "test:flush" })).toMatchObject({
-      success: true,
-    })
-  })
+  testScriptReload(
+    () => scriptStore(commands),
+    () => client.script("FLUSH")
+  )
 
   it("runs a loaded script by its hash alone", async () => {
     const sent: string[] = []

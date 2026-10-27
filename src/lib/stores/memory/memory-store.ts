@@ -60,7 +60,8 @@ export function memoryStore({ clock = Date.now }: MemoryStoreOptions = {}): Stor
             ? applySlidingWindow(algorithm, state, cost, now)
             : applyTokenBucket(algorithm, state, cost, now)
 
-      if (transition.state !== undefined) states.set(key, transition.state)
+      // A cost of 0 reads without writing.
+      if (cost > 0 && transition.state !== undefined) states.set(key, transition.state)
 
       return Promise.resolve(transition.result)
     },
@@ -81,12 +82,8 @@ function applyFixedWindow(
     return { result: { now, remaining: limit - count, reset, success: false } }
   }
 
-  const result = { now, remaining: limit - count - cost, reset, success: true }
-
-  if (cost === 0) return { result }
-
   return {
-    result,
+    result: { now, remaining: limit - count - cost, reset, success: true },
     state: { count: count + cost, expiresAt: reset, type: "fixedWindow", window },
   }
 }
@@ -114,12 +111,8 @@ function applySlidingWindow(
     }
   }
 
-  const result = { now, remaining: limit - used - cost, reset: start + size, success: true }
-
-  if (cost === 0) return { result }
-
   return {
-    result,
+    result: { now, remaining: limit - used - cost, reset: start + size, success: true },
     state: {
       current: current + cost,
       expiresAt: start + 2 * size,
@@ -189,8 +182,6 @@ function applyTokenBucket(
 
   const remaining = tokens - cost
   const result = { now, remaining, reset: refilledAt + interval, success: true }
-
-  if (cost === 0) return { result }
 
   // A missing bucket is a full bucket, so the state can expire once the bucket refills.
   const expiresAt = refilledAt + Math.ceil((capacity - remaining) / refillRate) * interval
