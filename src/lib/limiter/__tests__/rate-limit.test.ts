@@ -50,6 +50,39 @@ describe("buildLimiter", () => {
     expect(requests.map((request) => request.key)).toEqual(["suggestions:ip:203.0.113.7"])
   })
 
+  it("starts every key with the prefix, and keeps it out of the name", async () => {
+    const { requests, store } = recordingStore()
+    const limiter = buildLimiter({ prefix: "app", store })({
+      algorithm: threePerMinute,
+      name: "suggestions:ip",
+    })
+
+    const result = await rateLimit(limiter, "203.0.113.7")
+
+    expect(requests.map((request) => request.key)).toEqual(["app:suggestions:ip:203.0.113.7"])
+    expect(result.name).toBe("suggestions:ip")
+    expect(limiter.name).toBe("suggestions:ip")
+  })
+
+  it("keeps the counts of limiters with different prefixes apart in one store", async () => {
+    const store = memoryStore()
+    const options = { algorithm: fixedWindow({ limit: 1, window: 60_000 }), name: "api" }
+    const first = buildLimiter({ prefix: "first", store })(options)
+    const second = buildLimiter({ prefix: "second", store })(options)
+
+    await rateLimit(first, "ada")
+
+    await expect(rateLimit(first, "ada")).resolves.toMatchObject({ success: false })
+    await expect(rateLimit(second, "ada")).resolves.toMatchObject({ success: true })
+  })
+
+  it("rejects a prefix that is empty or not printable ASCII", () => {
+    const store = memoryStore()
+
+    expect(() => buildLimiter({ prefix: "", store })).toThrow(InvalidOptionError)
+    expect(() => buildLimiter({ prefix: "límite", store })).toThrow(InvalidOptionError)
+  })
+
   it("gives every identity its own key, even when names and parts contain separators", async () => {
     const { requests, store } = recordingStore()
     const limiter = buildLimiter({ store })
