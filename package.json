@@ -64,7 +64,7 @@
   },
   "scripts": {
     "analyze": "adamantite analyze",
-    "bench": "vitest bench --run --project \"unit (bench)\"",
+    "bench": "vitest bench --run --project \"unit (bench)\" --experimental.viteModuleRunner=false",
     "bench:bun-redis-store": "bun --bun vitest bench --run --project \"bun-redis-store (bench)\"",
     "bench:redis-store": "vitest bench --run --project \"redis-store (bench)\"",
     "bench:valkey-store": "vitest bench --run --project \"valkey-store (bench)\"",

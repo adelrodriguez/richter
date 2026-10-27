@@ -91,6 +91,8 @@ jobs:
 
   comment:
     needs: bench
+    # Post the results of the stores that finished, also when the job of another store fails.
+    if: ${{ !cancelled() && needs.bench.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -110,6 +112,8 @@ jobs:
           node-version-file: ".node-version"
 
       - name: Download results
+        # When every job fails, there is nothing to download. The comment then lists every store.
+        continue-on-error: true
         uses: actions/download-artifact@v8
         with:
           pattern: bench-*
@@ -120,14 +124,30 @@ jobs:
         env:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          reports=()
+          missing=()
+          for name in unit redis-store valkey-store bun-redis-store; do
+            if [ -f "bench-results/$name.json" ]; then
+              reports+=("bench-results/$name.json")
+            else
+              missing+=("\`$name\`")
+            fi
+          done
           {
             echo "<!-- performance-check -->"
             echo "## Performance check"
             echo
             echo "Results for $SHA on a GitHub-hosted runner. Compare cases within one run, not across runs."
             echo
-            node scripts/bench-report.ts bench-results/unit.json bench-results/redis-store.json \
-              bench-results/valkey-store.json bench-results/bun-redis-store.json
+            if [ ${#missing[@]} -gt 0 ]; then
+              echo "> [!WARNING]"
+              list=$(printf '%s, ' "${missing[@]}")
+              echo "> No results for ${list%, }. These jobs failed. See the workflow run."
+              echo
+            fi
+            if [ ${#reports[@]} -gt 0 ]; then
+              node scripts/bench-report.ts "${reports[@]}"
+            fi
           } > comment.md
           cat comment.md >> "$GITHUB_STEP_SUMMARY"
 
