@@ -1,0 +1,146 @@
+name: performance-check
+
+# Runs the benchmarks on a pull request with the `performance-check` label, and posts the results as
+# one comment that each run updates. Benchmarks on shared runners are noisy, so this is not a gate.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    # Run when the label is on the pull request, but not again when someone adds another label.
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'performance-check') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'performance-check')
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # On the job, not the workflow, so a run that skips this job does not cancel a run in progress.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.name }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: unit
+            script: bench
+            image: ""
+            cli: ""
+          - name: redis-store
+            script: bench:redis-store
+            image: redis:8
+            cli: redis-cli
+          - name: valkey-store
+            script: bench:valkey-store
+            image: valkey/valkey:8
+            cli: valkey-cli
+          - name: bun-redis-store
+            script: bench:bun-redis-store
+            image: redis:8
+            cli: redis-cli
+
+    services:
+      server:
+        # An empty image starts no service.
+        image: ${{ matrix.image }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "${{ matrix.cli }} ping" --health-interval 2s --health-timeout 2s
+          --health-retries 15
+
+    env:
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ".node-version"
+          cache: pnpm
+
+      - name: Setup Bun
+        if: matrix.name == 'bun-redis-store'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run benchmarks
+        run: >-
+          pnpm run ${{ matrix.script }} --reporter=default --reporter=json
+          --outputFile.json=bench-results/${{ matrix.name }}.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.name }}
+          path: bench-results/${{ matrix.name }}.json
+
+  comment:
+    needs: bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-comment
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ".node-version"
+
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bench-*
+          path: bench-results
+          merge-multiple: true
+
+      - name: Write comment
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo "<!-- performance-check -->"
+            echo "## Performance check"
+            echo
+            echo "Results for $SHA on a GitHub-hosted runner. Compare cases within one run, not across runs."
+            echo
+            node scripts/bench-report.ts bench-results/unit.json bench-results/redis-store.json \
+              bench-results/valkey-store.json bench-results/bun-redis-store.json
+          } > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- performance-check -->"))) | .id' \
+            | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          fi

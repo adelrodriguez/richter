@@ -64,6 +64,10 @@
   },
   "scripts": {
     "analyze": "adamantite analyze",
+    "bench": "vitest bench --run --project \"unit (bench)\"",
+    "bench:bun-redis-store": "bun --bun vitest bench --run --project \"bun-redis-store (bench)\"",
+    "bench:redis-store": "vitest bench --run --project \"redis-store (bench)\"",
+    "bench:valkey-store": "vitest bench --run --project \"valkey-store (bench)\"",
     "build": "tsdown",
     "build:debug": "tsdown --no-minify --sourcemap",
     "build:verify": "pnpm run build && node scripts/verify-build.ts",

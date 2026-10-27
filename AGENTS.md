@@ -83,3 +83,10 @@ Packref provides local copies of dependency source code so you can inspect the e
 - `test:bun-redis-store` runs Vitest on Bun, so it needs Bun installed.
 - `script-store.test.ts` tests the scripts themselves and runs with both the Redis and the Valkey store tests.
 - Every store runs the shared suite in `src/lib/store/__tests__/conformance.ts`. A new store must pass it.
+
+## Benchmarks
+
+- `pnpm run bench` runs the benchmarks that need no server: the memory store and the limiter. Each store has its own script: `bench:redis-store`, `bench:valkey-store`, and `bench:bun-redis-store`. They need the same server as the store tests.
+- Every store runs the shared benchmarks in `src/lib/store/__tests__/benchmarks.ts`. A new store gets a `<name>.bench.ts` file and a `benchmark.include` entry in `vitest.config.ts`.
+- `vitest bench` names each benchmark project `<project> (bench)`.
+- The `performance-check` workflow runs on a pull request with the `performance-check` label. It posts the results as one comment, which each run updates. `scripts/bench-report.ts` writes the comment.
