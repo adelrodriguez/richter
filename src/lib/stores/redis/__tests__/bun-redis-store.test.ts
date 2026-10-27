@@ -1,12 +1,10 @@
 import { RedisClient } from "bun"
-import { afterAll, describe, expect, it } from "vitest"
-import { fixedWindow } from "#lib/algorithms/algorithms.ts"
+import { afterAll, describe } from "vitest"
 import { testStore } from "#lib/store/__tests__/conformance.ts"
 import { bunRedisStore } from "#lib/stores/redis/bun-redis-store.ts"
+import { testScriptReload, url } from "./server.ts"
 
 // Needs Bun and a Redis server at REDIS_URL. Run it with `bun --bun vitest run --project bun-redis-store`.
-const url = process.env.REDIS_URL ?? "redis://localhost:6379"
-
 const client = new RedisClient(url)
 
 afterAll(() => {
@@ -16,15 +14,8 @@ afterAll(() => {
 describe("bunRedisStore with Bun.RedisClient", () => {
   testStore(() => bunRedisStore(client))
 
-  it("reloads its scripts after the server forgets them", async () => {
-    const store = bunRedisStore(client)
-    const algorithm = fixedWindow({ limit: 5, window: 2000 })
-    await store.consume({ algorithm, cost: 1, key: "test:flush" })
-
-    await client.send("SCRIPT", ["FLUSH"])
-
-    expect(await store.consume({ algorithm, cost: 0, key: "test:flush" })).toMatchObject({
-      success: true,
-    })
-  })
+  testScriptReload(
+    () => bunRedisStore(client),
+    () => client.send("SCRIPT", ["FLUSH"])
+  )
 })

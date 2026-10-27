@@ -1,7 +1,7 @@
 import type { Algorithm } from "#lib/algorithms/algorithms.ts"
 import type { Store, StoreResult } from "#lib/store/store.ts"
 import { capacityOf, windowOf } from "#lib/algorithms/algorithms.ts"
-import { InvalidOptionError, positiveInteger } from "#lib/options/options.ts"
+import { positiveInteger, printable } from "#lib/options/options.ts"
 import type { Identity } from "./identity.ts"
 import { blockedCache } from "./blocked-cache.ts"
 import { StoreError, StoreTimeoutError } from "./errors.ts"
@@ -242,15 +242,6 @@ export function buildLimiter<Supported extends Algorithm>({
   }
 
   return limiter
-}
-
-// Header values quote the name, so it must be printable ASCII. The prefix follows the same rule.
-function printable(option: string, value: string) {
-  if (!/^[ -~]+$/u.test(value)) {
-    throw new InvalidOptionError(option, value, "a non-empty string of printable ASCII characters")
-  }
-
-  return value
 }
 
 async function withTimeout<Value>(promise: Promise<Value>, timeout: number) {

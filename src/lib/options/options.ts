@@ -17,3 +17,12 @@ export function positiveInteger(option: string, value: number) {
 
   return value
 }
+
+// Header values quote names, so a name must be printable ASCII.
+export function printable(option: string, value: string) {
+  if (!/^[ -~]+$/u.test(value)) {
+    throw new InvalidOptionError(option, value, "a non-empty string of printable ASCII characters")
+  }
+
+  return value
+}
