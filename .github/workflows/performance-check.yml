@@ -84,7 +84,7 @@ jobs:
           --outputFile.json=bench-results/${{ matrix.name }}.json
 
       - name: Upload results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-${{ matrix.name }}
           path: bench-results/${{ matrix.name }}.json
@@ -110,7 +110,7 @@ jobs:
           node-version-file: ".node-version"
 
       - name: Download results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: bench-*
           path: bench-results
