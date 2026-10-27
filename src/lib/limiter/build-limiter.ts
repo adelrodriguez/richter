@@ -32,8 +32,9 @@ export type LimiterSettings = {
 export type BuildLimiterOptions<Supported extends Algorithm> = LimiterSettings & {
   readonly store: Store<Supported>
   /**
-   * Goes before the limiter name in every key. Factories with different prefixes never share counts
-   * in one store. Results and headers do not show it. Printable ASCII only.
+   * Goes before the limiter name in every key, joined with `:`. Limiters share counts when
+   * `prefix:name` and the identity match, so prefix `a:b` with name `c` shares counts with prefix
+   * `a` with name `b:c`. Results and headers do not show the prefix. Printable ASCII only.
    */
   readonly prefix?: string
 }

@@ -187,7 +187,7 @@ const limiter = buildLimiter({ store, prefix: "billing" })
 limiter({ name: "api:ip", algorithm }) // keys start with "billing:api:ip:"
 ```
 
-The prefix goes before the limiter name in every key. Results and headers do not show it. The prefix must be printable ASCII. If your Redis client sets a `keyPrefix`, the client adds it before the prefix.
+The prefix goes before the limiter name in every key, joined with `:`. Limiters share counts when `prefix:name` and the identity match, so prefix `a:b` with name `c` shares counts with prefix `a` with name `b:c`. Results and headers do not show the prefix. The prefix must be printable ASCII. If your Redis client sets a `keyPrefix`, the client adds it before the prefix.
 
 ## Run limiters
 
