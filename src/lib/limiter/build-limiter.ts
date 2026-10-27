@@ -31,11 +31,17 @@ export type LimiterSettings = {
 
 export type BuildLimiterOptions<Supported extends Algorithm> = LimiterSettings & {
   readonly store: Store<Supported>
+  /**
+   * Goes before the limiter name in every key, joined with `:`. Limiters share counts when
+   * `prefix:name` and the identity match, so prefix `a:b` with name `c` shares counts with prefix
+   * `a` with name `b:c`. Results and headers do not show the prefix. Printable ASCII only.
+   */
+  readonly prefix?: string
 }
 
 export type LimiterOptions<Supported extends Algorithm> = LimiterSettings & {
   /**
-   * Labels results and headers, and starts every key. Printable ASCII only.
+   * Labels results and headers, and goes into every key. Printable ASCII only.
    */
   readonly name: string
   readonly algorithm: Supported
@@ -132,13 +138,16 @@ export type DefineLimiter<Supported extends Algorithm> = {
  */
 export function buildLimiter<Supported extends Algorithm>({
   store,
+  prefix,
   ...defaults
 }: BuildLimiterOptions<Supported>): DefineLimiter<Supported> {
+  const namespace = prefix === undefined ? "" : `${printable("prefix", prefix)}:`
+
   function define<Input>(
     options: LimiterOptions<Supported>,
     identify: Identify<Input>
   ): Limiter<Input> {
-    const name = printableName(options.name)
+    const name = printable("name", options.name)
     const { algorithm } = options
     const timeout = positiveInteger(
       "timeout",
@@ -150,7 +159,7 @@ export function buildLimiter<Supported extends Algorithm>({
     const window = windowOf(algorithm)
 
     async function keyFor(input: Input) {
-      return keyOf(name, await identify(input))
+      return keyOf(`${namespace}${name}`, await identify(input))
     }
 
     function ask(key: string, cost: number) {
@@ -235,13 +244,13 @@ export function buildLimiter<Supported extends Algorithm>({
   return limiter
 }
 
-// Header values quote the name, so it must be printable ASCII.
-function printableName(name: string) {
-  if (!/^[ -~]+$/u.test(name)) {
-    throw new InvalidOptionError("name", name, "a non-empty string of printable ASCII characters")
+// Header values quote the name, so it must be printable ASCII. The prefix follows the same rule.
+function printable(option: string, value: string) {
+  if (!/^[ -~]+$/u.test(value)) {
+    throw new InvalidOptionError(option, value, "a non-empty string of printable ASCII characters")
   }
 
-  return name
+  return value
 }
 
 async function withTimeout<Value>(promise: Promise<Value>, timeout: number) {

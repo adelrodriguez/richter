@@ -161,7 +161,7 @@ const daily = limiter({
 
 ### Shared and per-limiter settings
 
-The `name` labels results and headers, and it starts every key in the store, so limiters that share a store never share counts. Give each limiter a unique name of printable ASCII characters.
+The `name` labels results and headers. It also goes into every key in the store, so limiters with different names never share counts. Give each limiter a unique name of printable ASCII characters.
 
 | Setting   | Type                    | Default     | Description                                                                                              |
 | --------- | ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------- |
@@ -176,6 +176,18 @@ const limiter = buildLimiter({ store, timeout: 500 })
 
 const slowButImportant = limiter({ name: "billing", algorithm, timeout: 2_000 })
 ```
+
+### Share a store with other apps
+
+Limiters with the same name share counts when they use the same store. To keep apps or services apart in one store, give each factory its own `prefix`:
+
+```typescript
+const limiter = buildLimiter({ store, prefix: "billing" })
+
+limiter({ name: "api:ip", algorithm }) // keys start with "billing:api:ip:"
+```
+
+The prefix goes before the limiter name in every key, joined with `:`. Limiters share counts when `prefix:name` and the identity match, so prefix `a:b` with name `c` shares counts with prefix `a` with name `b:c`. Results and headers do not show the prefix. The prefix must be printable ASCII. If your Redis client sets a `keyPrefix`, the client adds it before the prefix.
 
 ## Run limiters
 
