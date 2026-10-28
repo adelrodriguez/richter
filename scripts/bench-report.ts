@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { JsonTestResults } from "vitest/node"
 import { budgets } from "./bench-budgets.ts"
@@ -8,15 +8,21 @@ import { budgets } from "./bench-budgets.ts"
 //
 // Usage: node scripts/bench-report.ts <directory>
 //
-// The directory holds `<name>.json` for the pull request and `<name>.base.json` for the base branch,
-// for each name in `names`: the results of `vitest bench --reporter=json`.
+// The directory holds the results of `vitest bench --reporter=json` for each store in `stores`:
+// `<name>.<round>.json` for the pull request and `<name>.base.<round>.json` for the base branch.
+// The rounds ran in turns on one runner: base, pull request, base, pull request, and so on.
 
-const names = ["unit", "redis-store", "valkey-store", "bun-redis-store"]
+// A store that uses the network moves by up to 80% between two runs on one runner, so only the
+// stores that do not use the network can fail as a regression. All stores can fail on a budget.
+const stores = [
+  { gated: true, name: "unit" },
+  { gated: false, name: "redis-store" },
+  { gated: false, name: "valkey-store" },
+  { gated: false, name: "bun-redis-store" },
+]
 
-// A change smaller than this, or inside the combined margin of error, is noise.
+// A change of the medians smaller than this is noise.
 const tolerance = 0.1
-
-type Result = { readonly mean: number; readonly moe: number }
 
 const numberFormat = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 2 })
 
@@ -31,31 +37,40 @@ function roundUp(value: number) {
   return Math.ceil(value / step) * step
 }
 
-// The results of one report, by group, algorithm and case, in microseconds.
-function read(path: string) {
-  const results = new Map<string, Map<string, Map<string, Result>>>()
+function median(values: number[]) {
+  const sorted = values.toSorted((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1
+    ? (sorted[middle] ?? 0)
+    : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
+}
 
-  if (!existsSync(path)) {
-    return results
-  }
+// The mean of each round, by group, algorithm and case, in microseconds.
+function read(directory: string, pattern: RegExp) {
+  const results = new Map<string, Map<string, Map<string, number[]>>>()
+  const files = existsSync(directory) ? readdirSync(directory) : []
 
-  const report = JSON.parse(readFileSync(path, "utf8")) as JsonTestResults
+  for (const file of files.filter((name) => pattern.test(name))) {
+    const report = JSON.parse(readFileSync(join(directory, file), "utf8")) as JsonTestResults
 
-  for (const test of report.testResults.flatMap((file) => file.assertionResults)) {
-    const group = test.ancestorTitles.join(" > ")
-    const algorithms = results.get(group) ?? new Map<string, Map<string, Result>>()
-    const cases = algorithms.get(test.title) ?? new Map<string, Result>()
+    for (const test of report.testResults.flatMap((result) => result.assertionResults)) {
+      const group = test.ancestorTitles.join(" > ")
+      const algorithms = results.get(group) ?? new Map<string, Map<string, number[]>>()
+      const cases = algorithms.get(test.title) ?? new Map<string, number[]>()
 
-    for (const task of test.benchmarks.flatMap((benchmark) => benchmark.tasks)) {
-      cases.set(task.name, { mean: task.latency.mean * 1000, moe: task.latency.moe * 1000 })
+      for (const task of test.benchmarks.flatMap((benchmark) => benchmark.tasks)) {
+        cases.set(task.name, [...(cases.get(task.name) ?? []), task.latency.mean * 1000])
+      }
+
+      algorithms.set(test.title, cases)
+      results.set(group, algorithms)
     }
-
-    algorithms.set(test.title, cases)
-    results.set(group, algorithms)
   }
 
   return results
 }
+
+const directory = process.argv[2] ?? "."
 
 let regressions = 0
 let overBudget = 0
@@ -64,9 +79,9 @@ const lowerBudgets: string[] = []
 const missing: string[] = []
 const sections: string[] = []
 
-for (const name of names) {
-  const head = read(join(process.argv[2] ?? ".", `${name}.json`))
-  const base = read(join(process.argv[2] ?? ".", `${name}.base.json`))
+for (const { gated, name } of stores) {
+  const head = read(directory, new RegExp(`^${name}\\.\\d+\\.json$`))
+  const base = read(directory, new RegExp(`^${name}\\.base\\.\\d+\\.json$`))
 
   if (head.size === 0) {
     missing.push(`\`${name}\``)
@@ -77,35 +92,36 @@ for (const name of names) {
     const rows: string[] = []
 
     for (const [algorithm, cases] of algorithms) {
-      for (const [caseName, result] of cases) {
+      for (const [caseName, rounds] of cases) {
         const before = base.get(group)?.get(algorithm)?.get(caseName)
         const budget = budgets[group]?.[algorithm]?.[caseName]
-        const change = before ? result.mean / before.mean - 1 : undefined
+        const after = median(rounds)
+        const change = before ? after / median(before) - 1 : undefined
         const percent = change === undefined ? undefined : Math.round(change * 100)
-        const significant =
-          before !== undefined
-          && Math.abs(result.mean - before.mean) > Math.hypot(result.moe, before.moe)
+        // Every pull request round is slower, or faster, than every base round.
+        const slower = before !== undefined && Math.min(...rounds) > Math.max(...before)
+        const quicker = before !== undefined && Math.max(...rounds) < Math.min(...before)
 
         // A case can have several statuses. The base comparison does not need a budget.
         const statuses: string[] = []
 
-        if (budget !== undefined && result.mean > budget) {
+        if (budget !== undefined && after > budget) {
           statuses.push("❌ over budget")
           overBudget += 1
         }
 
-        if (change !== undefined && significant && change > tolerance) {
+        if (gated && change !== undefined && slower && change > tolerance) {
           statuses.push("⚠️ regression")
           regressions += 1
         }
 
-        if (change !== undefined && significant && change < -tolerance) {
+        if (gated && change !== undefined && quicker && change < -tolerance) {
           statuses.push("🚀 faster")
           faster += 1
 
-          if (budget !== undefined && roundUp(result.mean * 2) < budget) {
+          if (budget !== undefined && roundUp(after * 2) < budget) {
             lowerBudgets.push(
-              `| ${group} | ${algorithm} | ${caseName} | ${formatTime(budget)} | ${formatTime(roundUp(result.mean * 2))} |`
+              `| ${group} | ${algorithm} | ${caseName} | ${formatTime(budget)} | ${formatTime(roundUp(after * 2))} |`
             )
           }
         }
@@ -118,8 +134,8 @@ for (const name of names) {
           [
             algorithm,
             caseName,
-            before ? formatTime(before.mean) : "—",
-            formatTime(result.mean),
+            before ? formatTime(median(before)) : "—",
+            formatTime(after),
             percent === undefined ? "—" : `${percent > 0 ? "+" : ""}${percent}%`,
             budget === undefined ? "—" : formatTime(budget),
             statuses.join(", ") || "✅",
@@ -132,6 +148,9 @@ for (const name of names) {
       [
         `### ${group}`,
         "",
+        ...(gated
+          ? []
+          : ["The change is for information only. This store checks only its budgets.", ""]),
         "| Algorithm | Case | Base | PR | Change | Budget | Status |",
         "| --- | --- | ---: | ---: | ---: | ---: | --- |",
         ...rows.map((row) => `| ${row} |`),
@@ -159,7 +178,7 @@ if (missing.length > 0) {
 }
 
 output.push(
-  `A case regresses when it is more than ${tolerance * 100}% slower than the base branch, by more than the combined margin of error. Base and PR ran on the same runner.`,
+  `Base and PR ran in turns on the same runner, and the table shows the median of the rounds. A case regresses when its median is more than ${tolerance * 100}% slower than the base branch, and every PR round is slower than every base round. Only the memory store and the limiter can regress. The network stores move too much between runs, so they check only their budgets.`,
   ...sections
 )
 
