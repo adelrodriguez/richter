@@ -52,7 +52,8 @@ jobs:
   bench:
     needs: changes
     if: needs.changes.outputs.run == 'true'
-    name: ${{ matrix.name }}
+    # Not the bare store name, which the test jobs use as required checks.
+    name: bench (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # On the job, not the workflow, so a run that skips this job does not cancel a run in progress.
@@ -147,10 +148,12 @@ jobs:
           name: bench-${{ matrix.name }}
           path: bench-results/
 
+  # The required check on `main`. A skipped job counts as passed, so it skips only when no
+  # benchmarks need to run. It reports the stores that finished, also when another store fails.
   report:
-    needs: bench
-    # Report the stores that finished, also when the job of another store fails.
-    if: ${{ !cancelled() && needs.bench.result != 'skipped' }}
+    name: performance-check
+    needs: [changes, bench]
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -161,6 +164,12 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Check the change detection
+        if: needs.changes.result != 'success'
+        run: |
+          echo "::error::The changes job failed, so this check cannot tell whether the benchmarks must run."
+          exit 1
+
       - name: Checkout code
         uses: actions/checkout@v7
 
