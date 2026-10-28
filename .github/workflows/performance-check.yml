@@ -38,11 +38,14 @@ jobs:
             [ "$ADDED_LABEL" = "performance-check" ] && run=true || run=false
           elif [ "$HAS_LABEL" = "true" ]; then
             run=true
-          elif gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only \
-            | grep -qE '^(src/|vitest\.config\.ts$|pnpm-lock\.yaml$)'; then
-            run=true
           else
-            run=false
+            # A separate assignment, so a failed request fails the step instead of skipping the check.
+            files=$(gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only)
+            if grep -qE '^(src/|vitest\.config\.ts$|pnpm-lock\.yaml$)' <<< "$files"; then
+              run=true
+            else
+              run=false
+            fi
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
 

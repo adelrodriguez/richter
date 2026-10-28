@@ -86,25 +86,32 @@ for (const name of names) {
           before !== undefined
           && Math.abs(result.mean - before.mean) > Math.hypot(result.moe, before.moe)
 
-        let status = "✅"
+        // A case can have several statuses. The base comparison does not need a budget.
+        const statuses: string[] = []
 
-        if (budget === undefined) {
-          status = "❔ no budget"
-        } else if (result.mean > budget) {
-          status = "❌ over budget"
+        if (budget !== undefined && result.mean > budget) {
+          statuses.push("❌ over budget")
           overBudget += 1
-        } else if (change !== undefined && significant && change > tolerance) {
-          status = "⚠️ regression"
+        }
+
+        if (change !== undefined && significant && change > tolerance) {
+          statuses.push("⚠️ regression")
           regressions += 1
-        } else if (change !== undefined && significant && change < -tolerance) {
-          status = "🚀 faster"
+        }
+
+        if (change !== undefined && significant && change < -tolerance) {
+          statuses.push("🚀 faster")
           faster += 1
 
-          if (roundUp(result.mean * 2) < budget) {
+          if (budget !== undefined && roundUp(result.mean * 2) < budget) {
             lowerBudgets.push(
               `| ${group} | ${algorithm} | ${caseName} | ${formatTime(budget)} | ${formatTime(roundUp(result.mean * 2))} |`
             )
           }
+        }
+
+        if (budget === undefined) {
+          statuses.push("❔ no budget")
         }
 
         rows.push(
@@ -115,7 +122,7 @@ for (const name of names) {
             formatTime(result.mean),
             percent === undefined ? "—" : `${percent > 0 ? "+" : ""}${percent}%`,
             budget === undefined ? "—" : formatTime(budget),
-            status,
+            statuses.join(", ") || "✅",
           ].join(" | ")
         )
       }
@@ -133,17 +140,21 @@ for (const name of names) {
   }
 }
 
-const passed = regressions === 0 && overBudget === 0
-const summary = [
-  passed ? "✅ No regressions" : `❌ ${regressions} regressions, ${overBudget} over budget`,
-  `🚀 ${faster} faster`,
-].join(" · ")
+// A store without results fails the check, because nothing shows that it did not regress. A base
+// branch without results is valid: it has no benchmarks yet.
+const problems = [
+  regressions > 0 && `${regressions} regressions`,
+  overBudget > 0 && `${overBudget} over budget`,
+  missing.length > 0 && `${missing.length} without results`,
+].filter((problem) => problem !== false)
+const passed = problems.length === 0
+const summary = `${passed ? "✅ No regressions" : `❌ ${problems.join(", ")}`} · 🚀 ${faster} faster`
 
 const output = [`**${summary}**`]
 
 if (missing.length > 0) {
   output.push(
-    `> [!WARNING]\n> No results for ${missing.join(", ")}. These jobs failed. See the workflow run.`
+    `> [!WARNING]\n> No results for ${missing.join(", ")}. Their jobs failed, or their results did not download. See the workflow run.`
   )
 }
 
