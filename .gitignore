@@ -39,3 +39,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # packref
 .packref/packages/
 .packref/.packref-lock-*.tmp
+
+# benchmark reports
+bench-results

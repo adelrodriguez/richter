@@ -1,0 +1,218 @@
+name: performance-check
+
+# Runs the benchmarks of a pull request and of its base branch on the same runner, and fails when a
+# case regresses or goes over its budget in `scripts/bench-budgets.ts`. It posts the results as one
+# comment that each run updates.
+#
+# It runs when a pull request changes the code or its dependencies. The `performance-check` label
+# makes it run on any pull request.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.changes.outputs.run }}
+
+    steps:
+      - name: Find changes
+        id: changes
+        env:
+          ACTION: ${{ github.event.action }}
+          ADDED_LABEL: ${{ github.event.label.name }}
+          GH_TOKEN: ${{ github.token }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'performance-check') }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Another label changes nothing, so it does not start the benchmarks again.
+          if [ "$ACTION" = "labeled" ]; then
+            [ "$ADDED_LABEL" = "performance-check" ] && run=true || run=false
+          elif [ "$HAS_LABEL" = "true" ]; then
+            run=true
+          else
+            # A separate assignment, so a failed request fails the step instead of skipping the check.
+            files=$(gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only)
+            if grep -qE '^(src/|vitest\.config\.ts$|pnpm-lock\.yaml$)' <<< "$files"; then
+              run=true
+            else
+              run=false
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  bench:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # On the job, not the workflow, so a run that skips this job does not cancel a run in progress.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.name }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: unit
+            script: bench
+            image: ""
+            cli: ""
+          - name: redis-store
+            script: bench:redis-store
+            image: redis:8
+            cli: redis-cli
+          - name: valkey-store
+            script: bench:valkey-store
+            image: valkey/valkey:8
+            cli: valkey-cli
+          - name: bun-redis-store
+            script: bench:bun-redis-store
+            image: redis:8
+            cli: redis-cli
+
+    services:
+      server:
+        # An empty image starts no service.
+        image: ${{ matrix.image }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "${{ matrix.cli }} ping" --health-interval 2s --health-timeout 2s
+          --health-retries 15
+
+    env:
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Checkout base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ".node-version"
+          cache: pnpm
+
+      - name: Setup Bun
+        if: matrix.name == 'bun-redis-store'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      # The base branch runs first, on the same runner, so the two results are comparable. A base
+      # branch without this benchmark gives no base result, and the report checks only the budgets.
+      - name: Run base benchmarks
+        working-directory: base
+        env:
+          SCRIPT: ${{ matrix.script }}
+        run: |
+          if jq -e --arg script "$SCRIPT" '.scripts[$script]' package.json > /dev/null; then
+            pnpm install --frozen-lockfile
+            pnpm run "$SCRIPT" --reporter=default --reporter=json \
+              --outputFile.json="$GITHUB_WORKSPACE/bench-results/${{ matrix.name }}.base.json"
+          else
+            echo "The base branch has no $SCRIPT script."
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run benchmarks
+        run: >-
+          pnpm run ${{ matrix.script }} --reporter=default --reporter=json
+          --outputFile.json=bench-results/${{ matrix.name }}.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-${{ matrix.name }}
+          path: bench-results/
+
+  report:
+    needs: bench
+    # Report the stores that finished, also when the job of another store fails.
+    if: ${{ !cancelled() && needs.bench.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-report
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ".node-version"
+
+      - name: Download results
+        # When every job fails, there is nothing to download. The report then lists every store.
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: bench-*
+          path: bench-results
+          merge-multiple: true
+
+      - name: Write report
+        id: report
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status=0
+          node scripts/bench-report.ts bench-results > report.md || status=$?
+          {
+            echo "<!-- performance-check -->"
+            echo "## Performance check"
+            echo
+            echo "Results for $SHA."
+            echo
+            cat report.md
+          } > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Post comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- performance-check -->"))) | .id' \
+            | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          fi
+
+      # After the comment, so a failed check still shows its results.
+      - name: Fail on a regression or a case over budget
+        if: steps.report.outputs.status != '0'
+        run: |
+          echo "::error::A benchmark regressed or went over its budget. See the pull request comment."
+          exit 1
