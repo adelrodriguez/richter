@@ -1,5 +1,11 @@
 # richter
 
+## 0.2.0
+
+### Minor Changes
+
+- f5079df: Add a `prefix` option to `buildLimiter`. The prefix goes before the limiter name in every key, so apps with different prefixes can use one store without sharing counts.
+
 ## 0.1.0
 
 ### Minor Changes
