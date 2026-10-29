@@ -1,11 +1,11 @@
 name: performance-check
 
-# Runs the benchmarks of a pull request and of its base branch on the same runner, and fails when a
-# case regresses or goes over its budget in `scripts/bench-budgets.ts`. It posts the results as one
-# comment that each run updates.
+# Runs the benchmarks of a pull request and of its base branch in turns on one runner, and fails
+# when a case regresses or goes over its budget in `scripts/bench-budgets.ts`. It posts the results as
+# one comment that each run updates.
 #
-# It runs when a pull request changes the code or its dependencies. The `performance-check` label
-# makes it run on any pull request.
+# It runs only on a pull request with the `performance-check` label. It is not a required check on
+# `main`, so it does not block a merge.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -14,68 +14,42 @@ permissions:
   contents: read
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      run: ${{ steps.changes.outputs.run }}
-
-    steps:
-      - name: Find changes
-        id: changes
-        env:
-          ACTION: ${{ github.event.action }}
-          ADDED_LABEL: ${{ github.event.label.name }}
-          GH_TOKEN: ${{ github.token }}
-          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'performance-check') }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          # Another label changes nothing, so it does not start the benchmarks again.
-          if [ "$ACTION" = "labeled" ]; then
-            [ "$ADDED_LABEL" = "performance-check" ] && run=true || run=false
-          elif [ "$HAS_LABEL" = "true" ]; then
-            run=true
-          else
-            # A separate assignment, so a failed request fails the step instead of skipping the check.
-            files=$(gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only)
-            if grep -qE '^(src/|vitest\.config\.ts$|pnpm-lock\.yaml$)' <<< "$files"; then
-              run=true
-            else
-              run=false
-            fi
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-
   bench:
-    needs: changes
-    if: needs.changes.outputs.run == 'true'
-    name: ${{ matrix.name }}
+    # Another label changes nothing, so it does not start the benchmarks again.
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'performance-check') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'performance-check')
+    # Not the bare store name, which the test jobs use as required checks.
+    name: bench (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     # On the job, not the workflow, so a run that skips this job does not cancel a run in progress.
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.name }}
       cancel-in-progress: true
     strategy:
       fail-fast: false
+      # Only the unit benchmarks can fail as a regression (see `scripts/bench-report.ts`), so only
+      # they need several rounds.
       matrix:
         include:
           - name: unit
+            rounds: 3
             script: bench
             image: ""
             cli: ""
           - name: redis-store
+            rounds: 1
             script: bench:redis-store
             image: redis:8
             cli: redis-cli
           - name: valkey-store
+            rounds: 1
             script: bench:valkey-store
             image: valkey/valkey:8
             cli: valkey-cli
           - name: bun-redis-store
+            rounds: 1
             script: bench:bun-redis-store
             image: redis:8
             cli: redis-cli
@@ -118,28 +92,33 @@ jobs:
         with:
           bun-version: "1.4.4"
 
-      # The base branch runs first, on the same runner, so the two results are comparable. A base
-      # branch without this benchmark gives no base result, and the report checks only the budgets.
-      - name: Run base benchmarks
-        working-directory: base
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          if jq -e --arg script "$SCRIPT" '.scripts[$script]' base/package.json > /dev/null; then
+            pnpm --dir base install --frozen-lockfile
+          else
+            echo "The base branch has no $SCRIPT script, so the report checks only the budgets."
+          fi
         env:
           SCRIPT: ${{ matrix.script }}
-        run: |
-          if jq -e --arg script "$SCRIPT" '.scripts[$script]' package.json > /dev/null; then
-            pnpm install --frozen-lockfile
-            pnpm run "$SCRIPT" --reporter=default --reporter=json \
-              --outputFile.json="$GITHUB_WORKSPACE/bench-results/${{ matrix.name }}.base.json"
-          else
-            echo "The base branch has no $SCRIPT script."
-          fi
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+      # Base and pull request run in turns on one runner, so a slow period on the runner affects
+      # both. A base branch without this benchmark has no `node_modules`, and only the PR runs.
       - name: Run benchmarks
-        run: >-
-          pnpm run ${{ matrix.script }} --reporter=default --reporter=json
-          --outputFile.json=bench-results/${{ matrix.name }}.json
+        env:
+          NAME: ${{ matrix.name }}
+          ROUNDS: ${{ matrix.rounds }}
+          SCRIPT: ${{ matrix.script }}
+        run: |
+          for round in $(seq "$ROUNDS"); do
+            if [ -d base/node_modules ]; then
+              pnpm --dir base run "$SCRIPT" --reporter=default --reporter=json \
+                --outputFile.json="$GITHUB_WORKSPACE/bench-results/$NAME.base.$round.json"
+            fi
+            pnpm run "$SCRIPT" --reporter=default --reporter=json \
+              --outputFile.json="$GITHUB_WORKSPACE/bench-results/$NAME.$round.json"
+          done
 
       - name: Upload results
         uses: actions/upload-artifact@v7
@@ -147,9 +126,11 @@ jobs:
           name: bench-${{ matrix.name }}
           path: bench-results/
 
+  # It reports the stores that finished, also when another store fails, and it is skipped when the
+  # benchmarks are skipped.
   report:
+    name: performance-check
     needs: bench
-    # Report the stores that finished, also when the job of another store fails.
     if: ${{ !cancelled() && needs.bench.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
