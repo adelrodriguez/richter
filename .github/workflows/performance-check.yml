@@ -4,8 +4,8 @@ name: performance-check
 # when a case regresses or goes over its budget in `scripts/bench-budgets.ts`. It posts the results as
 # one comment that each run updates.
 #
-# It runs only on a pull request with the `performance-check` label. The `performance-check` job is a
-# required check on `main`. Without the label it is skipped, which counts as passed.
+# It runs only on a pull request with the `performance-check` label. It is not a required check on
+# `main`, so it does not block a merge.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -126,8 +126,8 @@ jobs:
           name: bench-${{ matrix.name }}
           path: bench-results/
 
-  # The required check on `main`. It reports the stores that finished, also when another store
-  # fails, and it is skipped when the benchmarks are skipped.
+  # It reports the stores that finished, also when another store fails, and it is skipped when the
+  # benchmarks are skipped.
   report:
     name: performance-check
     needs: bench
