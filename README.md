@@ -88,7 +88,7 @@ A limiter is a named definition: the algorithm that decides, and how to identify
 
 ### Choose an algorithm
 
-Every duration is a whole number of milliseconds.
+Every duration is a whole number of milliseconds, up to 2^50 ms (about 35,000 years). A token bucket must also refill completely in that time. Longer periods would give expiry times that no store can keep exact.
 
 ```typescript
 import { fixedWindow, slidingWindow, tokenBucket } from "richter"
@@ -419,6 +419,8 @@ Every check touches a single key, as Redis Cluster requires.
 ### Memory
 
 `memoryStore` counts in the current process. Each instance of your application counts separately, and a restart clears all counts. Use it for tests, for single-instance applications, and as a fallback.
+
+It keeps one entry for each identity until that identity's state expires, with no limit on the number of entries. When callers choose their own identities, for example with a header, many unique identities in one window use memory in every instance. Use Redis or Valkey there.
 
 ```typescript
 import { memoryStore } from "richter/stores/memory"

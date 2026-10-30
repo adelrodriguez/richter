@@ -87,6 +87,11 @@ function parseReply(reply: unknown): StoreResult {
     || typeof remaining !== "number"
     || typeof reset !== "number"
     || typeof now !== "number"
+    // The scripts return whole numbers, so anything else comes from a faulty client or server.
+    || !Number.isSafeInteger(remaining)
+    || !Number.isSafeInteger(reset)
+    || !Number.isSafeInteger(now)
+    || remaining < 0
   ) {
     throw new InvalidReplyError(reply)
   }

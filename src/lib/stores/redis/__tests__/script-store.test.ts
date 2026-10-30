@@ -114,6 +114,35 @@ describe("scriptStore", () => {
     expect(ttl).toBeLessThanOrEqual(2 * week)
   })
 
+  it.each([
+    fixedWindow({ limit: 5, window: 2 ** 50 }),
+    slidingWindow({ limit: 5, window: 2 ** 50 }),
+    tokenBucket({ capacity: 4, interval: 2 ** 48, refillRate: 1 }),
+  ])("expires $type state with the longest period it accepts", async (algorithm) => {
+    const store = scriptStore(commands)
+    const key = `test:${crypto.randomUUID()}`
+    await store.consume({ algorithm, cost: 4, key })
+
+    expect(await client.pttl(key)).toBeGreaterThan(0)
+  })
+
+  it.each([
+    [[1, Number.NaN, 2000, 1000]],
+    [[1, 4, Number.POSITIVE_INFINITY, 1000]],
+    [[1, 4, 2000, -1.5]],
+    [[1, -1, 2000, 1000]],
+  ])("rejects a reply with numbers no script returns: %o", async (reply) => {
+    const store = scriptStore({
+      del: () => Promise.resolve(0),
+      eval: () => Promise.resolve(reply),
+      evalsha: () => Promise.resolve(reply),
+    })
+
+    await expect(
+      store.consume({ algorithm: fixedWindow({ limit: 5, window: 2000 }), cost: 1, key: "k" })
+    ).rejects.toThrow(InvalidReplyError)
+  })
+
   it("rejects a reply it does not recognize", async () => {
     const store = scriptStore({
       del: () => Promise.resolve(0),
