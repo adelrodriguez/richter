@@ -4,8 +4,9 @@ import { capacityOf, windowOf } from "#lib/algorithms/algorithms.ts"
 import { positiveInteger, printable } from "#lib/options/options.ts"
 import type { Identity } from "./identity.ts"
 import { blockedCache } from "./blocked-cache.ts"
-import { StoreError, StoreTimeoutError } from "./errors.ts"
+import { StoreError } from "./errors.ts"
 import { keyOf } from "./identity.ts"
+import { storeTimer } from "./store-timer.ts"
 
 const DEFAULT_TIMEOUT = 1000
 
@@ -157,13 +158,14 @@ export function buildLimiter<Supported extends Algorithm>({
     const blocks = (options.cache ?? defaults.cache ?? true) ? blockedCache() : undefined
     const limit = capacityOf(algorithm)
     const window = windowOf(algorithm)
+    const watch = storeTimer(timeout)
 
     async function keyFor(input: Input) {
       return keyOf(`${namespace}${name}`, await identify(input))
     }
 
     function ask(key: string, cost: number) {
-      return withTimeout(store.consume({ algorithm, cost, key }), timeout)
+      return watch(store.consume({ algorithm, cost, key }))
     }
 
     function counts({ now, remaining, reset }: StoreResult) {
@@ -179,7 +181,7 @@ export function buildLimiter<Supported extends Algorithm>({
           blocks?.clear(key)
 
           try {
-            await withTimeout(store.clear(key), timeout)
+            await watch(store.clear(key))
           } catch (error) {
             throw new StoreError(error)
           }
@@ -242,19 +244,4 @@ export function buildLimiter<Supported extends Algorithm>({
   }
 
   return limiter
-}
-
-async function withTimeout<Value>(promise: Promise<Value>, timeout: number) {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const expired = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      reject(new StoreTimeoutError(timeout))
-    }, timeout)
-  })
-
-  try {
-    return await Promise.race([promise, expired])
-  } finally {
-    clearTimeout(timer)
-  }
 }

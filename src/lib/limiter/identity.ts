@@ -7,7 +7,12 @@ export type Identity = string | readonly [string, ...string[]] | null
 // Escaping never produces a raw `%` followed by `00`, so no other identity has this key.
 const GLOBAL = "%00"
 
+const SPECIAL = /[%:|]/
+
 function escape(part: string) {
+  // Most parts have nothing to escape, and the test is faster than three replacements.
+  if (!SPECIAL.test(part)) return part
+
   return part.replaceAll("%", "%25").replaceAll(":", "%3A").replaceAll("|", "%7C")
 }
 
@@ -17,7 +22,7 @@ function escape(part: string) {
 export function keyOf(name: string, identity: Identity) {
   if (identity === null) return `${name}:${GLOBAL}`
 
-  const parts = typeof identity === "string" ? [identity] : identity
+  if (typeof identity === "string") return `${name}:${escape(identity)}`
 
-  return `${name}:${parts.map((part) => escape(part)).join("|")}`
+  return `${name}:${identity.map((part) => escape(part)).join("|")}`
 }

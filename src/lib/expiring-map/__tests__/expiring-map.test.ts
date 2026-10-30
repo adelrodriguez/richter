@@ -3,25 +3,19 @@ import { expiringMap } from "#lib/expiring-map/expiring-map.ts"
 
 describe("expiringMap", () => {
   it("hides an entry from its expiry time", () => {
-    const clock = { now: 0 }
-    const map = expiringMap<{ expiresAt: number }>(() => clock.now)
-    map.set("a", { expiresAt: 100 })
+    const map = expiringMap<{ expiresAt: number }>()
+    map.set("a", { expiresAt: 100 }, 0)
 
-    clock.now = 99
-    expect(map.get("a")).toEqual({ expiresAt: 100 })
-
-    clock.now = 100
-    expect(map.get("a")).toBeUndefined()
+    expect(map.get("a", 99)).toEqual({ expiresAt: 100 })
+    expect(map.get("a", 100)).toBeUndefined()
   })
 
   it("removes expired entries it never reads", () => {
-    const clock = { now: 0 }
-    const map = expiringMap<{ expiresAt: number }>(() => clock.now)
-    map.set("a", { expiresAt: 100 })
-    map.set("b", { expiresAt: 100 })
+    const map = expiringMap<{ expiresAt: number }>()
+    map.set("a", { expiresAt: 100 }, 0)
+    map.set("b", { expiresAt: 100 }, 0)
 
-    clock.now = 60_000
-    map.set("c", { expiresAt: 120_000 })
+    map.set("c", { expiresAt: 120_000 }, 60_000)
 
     expect(map.size).toBe(1)
   })

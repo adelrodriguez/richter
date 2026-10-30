@@ -4,15 +4,16 @@ type Expiring = { readonly expiresAt: number }
 
 // A map whose entries disappear at `expiresAt`. Reads skip expired entries, and writes remove all
 // expired entries at most once per sweep interval, so memory stays bounded by the live entries.
-export function expiringMap<Value extends Expiring>(clock: () => number) {
+// Each call takes the caller's `now`, so a caller reads its clock once for a get and a set.
+export function expiringMap<Value extends Expiring>() {
   const entries = new Map<string, Value>()
-  let sweptAt = clock()
+  let sweptAt: number | undefined
 
   return {
-    get(key: string) {
+    get(key: string, now: number) {
       const entry = entries.get(key)
 
-      if (entry !== undefined && entry.expiresAt <= clock()) {
+      if (entry !== undefined && entry.expiresAt <= now) {
         entries.delete(key)
         return
       }
@@ -20,8 +21,8 @@ export function expiringMap<Value extends Expiring>(clock: () => number) {
       return entry
     },
 
-    set(key: string, value: Value) {
-      const now = clock()
+    set(key: string, value: Value, now: number) {
+      sweptAt ??= now
 
       if (now - sweptAt >= SWEEP_INTERVAL) {
         for (const [entryKey, entry] of entries) {
