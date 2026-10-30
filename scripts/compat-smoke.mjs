@@ -34,25 +34,14 @@ for (const [index, content] of contents.entries()) {
   )
 }
 
-if (typeof Array.prototype.toSorted !== "function") {
+if (typeof Promise.withResolvers !== "function") {
   throw new Error("This runtime is below the supported floor")
 }
 
-// Globals that Node.js added after 20.0.0.
+// Globals that Node.js added after 22.0.0.
 delete RegExp.escape
-delete Object.groupBy
-delete Map.groupBy
-delete Promise.withResolvers
-delete Array.fromAsync
 delete Error.isError
 delete Math.sumPrecise
-delete Set.prototype.difference
-delete Set.prototype.intersection
-delete Set.prototype.isDisjointFrom
-delete Set.prototype.isSubsetOf
-delete Set.prototype.isSupersetOf
-delete Set.prototype.symmetricDifference
-delete Set.prototype.union
 
 /**
  * @type {typeof import("../src/index")}

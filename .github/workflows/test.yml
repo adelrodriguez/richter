@@ -174,7 +174,7 @@ jobs:
         uses: actions/setup-node@v7
         with:
           # Keep equal to the `engines.node` floor in package.json.
-          node-version: "20.0.0"
+          node-version: "22.0.0"
 
       - name: Run compatibility smoke test
         run: node scripts/compat-smoke.mjs dist
