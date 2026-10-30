@@ -163,11 +163,11 @@ const daily = limiter({
 
 The `name` labels results and headers. It also goes into every key in the store, so limiters with different names never share counts. Give each limiter a unique name of printable ASCII characters.
 
-| Setting   | Type                    | Default     | Description                                                                                              |
-| --------- | ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------- |
-| `timeout` | `number`                | `1000`      | Milliseconds to wait for the store before the result is a store error.                                   |
-| `cache`   | `boolean`               | `true`      | Remember denials in this process until they reset, and skip the store when the same cost is asked again. |
-| `mode`    | `"enforce" \| "dryRun"` | `"enforce"` | See [dry-run mode](#try-a-limit-in-dry-run-mode).                                                        |
+| Setting   | Type                    | Default     | Description                                                                                                                                                                           |
+| --------- | ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timeout` | `number`                | `1000`      | Milliseconds to wait for the store before the result is a store error.                                                                                                                |
+| `cache`   | `boolean`               | `true`      | Remember denials in this process until they reset, and skip the store when the same cost is asked again. Each limiter remembers at most 10,000 denials, and forgets the oldest first. |
+| `mode`    | `"enforce" \| "dryRun"` | `"enforce"` | See [dry-run mode](#try-a-limit-in-dry-run-mode).                                                                                                                                     |
 
 Pass a setting to `buildLimiter` to apply it to every limiter, or to one limiter to override it:
 
