@@ -144,6 +144,10 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read
+    # A job output, not an artifact: the bench jobs run pull request code that can upload artifacts
+    # to this run, but no other job can set this job's outputs.
+    outputs:
+      comment: ${{ steps.report.outputs.comment }}
 
     steps:
       - name: Checkout base branch
@@ -182,15 +186,16 @@ jobs:
             cat report.md
           } > comment.md
           cat comment.md >> "$GITHUB_STEP_SUMMARY"
-          echo "status=$status" >> "$GITHUB_OUTPUT"
+          # A random delimiter, so no line of the report can end the output early.
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "status=$status"
+            echo "comment<<$delimiter"
+            cat comment.md
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Upload comment
-        uses: actions/upload-artifact@v7
-        with:
-          name: performance-comment
-          path: comment.md
-
-      # After the upload, so a failed check still posts its results.
+      # The comment job still posts the results of a failed check.
       - name: Fail on a regression or a case over budget
         if: steps.report.outputs.status != '0'
         run: |
@@ -202,7 +207,7 @@ jobs:
   comment:
     name: performance-check comment
     needs: report
-    if: ${{ !cancelled() && needs.report.result != 'skipped' }}
+    if: ${{ !cancelled() && needs.report.outputs.comment != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -212,16 +217,13 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Download comment
-        uses: actions/download-artifact@v8
-        with:
-          name: performance-comment
-
       - name: Post comment
         env:
+          BODY: ${{ needs.report.outputs.comment }}
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
+          printf '%s\n' "$BODY" > comment.md
           id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
             --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- performance-check -->"))) | .id' \
             | head -n 1)
