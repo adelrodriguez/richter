@@ -46,16 +46,15 @@ function median(values: number[]) {
 }
 
 // Group, algorithm and case names come from the pull request's benchmark files, so a name must not
-// change the comment's Markdown, add HTML or links, or mention anyone.
-function text(name: string) {
-  return name
-    .slice(0, 100)
-    .replaceAll(/\p{Cc}+/gu, " ")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("@", "&#64;")
-    .replaceAll(/[|[\]`\\]/gu, (character) => `\\${character}`)
+// add Markdown, HTML, links or mentions to the comment. GitHub renders a code span as literal text,
+// so each name becomes one, without backticks or line breaks that could end it.
+function code(name: string) {
+  return `\`${name.slice(0, 100).replaceAll(/[\p{Cc}`]+/gu, " ")}\``
+}
+
+// In a table, a pipe ends the cell even inside a code span, unless it is escaped.
+function cell(name: string) {
+  return code(name).replaceAll("|", "\\|")
 }
 
 // The mean of each round, by group, algorithm and case, in microseconds.
@@ -135,7 +134,7 @@ for (const { gated, name } of stores) {
 
           if (budget !== undefined && roundUp(after * 2) < budget) {
             lowerBudgets.push(
-              `| ${text(group)} | ${text(algorithm)} | ${text(caseName)} | ${formatTime(budget)} | ${formatTime(roundUp(after * 2))} |`
+              `| ${cell(group)} | ${cell(algorithm)} | ${cell(caseName)} | ${formatTime(budget)} | ${formatTime(roundUp(after * 2))} |`
             )
           }
         }
@@ -146,8 +145,8 @@ for (const { gated, name } of stores) {
 
         rows.push(
           [
-            text(algorithm),
-            text(caseName),
+            cell(algorithm),
+            cell(caseName),
             before ? formatTime(median(before)) : "—",
             formatTime(after),
             percent === undefined ? "—" : `${percent > 0 ? "+" : ""}${percent}%`,
@@ -160,7 +159,7 @@ for (const { gated, name } of stores) {
 
     sections.push(
       [
-        `### ${text(group)}`,
+        `### ${code(group)}`,
         "",
         ...(gated
           ? []
