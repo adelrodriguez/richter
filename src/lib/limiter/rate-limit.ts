@@ -68,7 +68,10 @@ export async function rateLimit<Input>(
     others.push([limiter, key])
   }
 
-  const head = await first[internal].consume(firstKey, cost)
+  // A denial can be remembered while an earlier limiter waits for the store, so check again just
+  // before each store call.
+  const head =
+    first[internal].blocked(firstKey, cost) ?? (await first[internal].consume(firstKey, cost))
   const results = [head]
 
   if (!head.success) return { ...head, results }
@@ -76,8 +79,9 @@ export async function rateLimit<Input>(
   let tightest: AllowedResult = head
 
   for (const [limiter, key] of others) {
+    const blocked = limiter[internal].blocked(key, cost)
     // oxlint-disable-next-line eslint/no-await-in-loop -- Limiters run in order, so a denial stops later limiters from spending.
-    const result = await limiter[internal].consume(key, cost)
+    const result = blocked ?? (await limiter[internal].consume(key, cost))
     results.push(result)
 
     if (!result.success) return { ...result, results }
