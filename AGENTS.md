@@ -20,6 +20,12 @@ Use the default five-role triage vocabulary. See `docs/agents/triage-labels.md`.
 
 Use the single-context domain-doc layout. See `docs/agents/domain.md`.
 
+## Project docs
+
+- Read `docs/architecture.md` before you add or move code in `src/`, or add a store.
+- Read `docs/testing.md` before you add, change, or run tests.
+- Read `docs/benchmarks.md` before you change performance, benchmarks, or budgets.
+
 ## Changesets
 
 - Use Changesets for versioning and changelog management.
@@ -66,31 +72,3 @@ Packref provides local copies of dependency source code so you can inspect the e
 - Multiple versions of the same package can coexist; check `.packref/packref-lock.json` for the full list
 
 <!-- PACKREF:END -->
-
-## Structure
-
-- `src/lib` holds one folder per domain. Dependencies point one way: `options` and `expiring-map` ← `algorithms` ← `store` (the contract) ← `stores/*` and `limiter`. `oxlint.config.ts` enforces this.
-- A folder imports its own files with `./`, and other folders with `#lib/...`.
-- A new store goes in `src/lib/stores/<name>/`, with its public entry in `src/stores/<name>.ts`, a `./stores/<name>` export in `package.json`, and an entry in `tsdown.config.ts`. The lint rules already cover it.
-- An error class lives with the code that throws it.
-- The Redis scripts are plain `.lua` files. `scripts.macro.ts` inlines them into the bundle at build time through `unplugin-macros`, so the package never reads files at run time.
-- `src/lib/stores/redis/` holds one store per client: `redis-store.ts` (ioredis and node-redis), `valkey-store.ts` (iovalkey), and `bun-redis-store.ts` (`Bun.RedisClient`). Each takes the client as it is and adapts it to `scriptStore` in `script-store.ts`, which runs the scripts. A new client for these servers gets its own store here.
-
-## Tests
-
-- A source file's tests live next to it in `__tests__/<file>.test.ts`, and test that file. Helpers that several test files share go in a plain `__tests__/<name>.ts` file.
-- `pnpm run test` runs the unit tests, which need no server. Each store has its own Vitest project and script: `test:redis-store`, `test:valkey-store`, and `test:bun-redis-store`. CI runs each as its own job.
-- The store tests need a server at `REDIS_URL`, which defaults to `redis://localhost:6379`. Start one with `docker run --rm -p 6379:6379 redis:8`, or `valkey/valkey:8` for the Valkey store.
-- `test:bun-redis-store` runs Vitest on Bun, so it needs Bun installed.
-- `script-store.test.ts` tests the scripts themselves and runs with both the Redis and the Valkey store tests.
-- Every store runs the shared suite in `src/lib/store/__tests__/conformance.ts`. A new store must pass it.
-- Each supported runtime runs the built package on its floor. `scripts/compat/smoke.mjs` holds the checks and imports nothing. Each runtime has an entry file in `scripts/compat/` and a `compat-<runtime>` job in `test.yml`, which pins the floor from `engines` in `package.json`. To add a runtime such as workerd, add an entry file that loads `dist/` and calls `smoke`, and add its job.
-
-## Benchmarks
-
-- `pnpm run bench` runs the benchmarks that need no server: the memory store and the limiter. Each store has its own script: `bench:redis-store`, `bench:valkey-store`, and `bench:bun-redis-store`. They need the same server as the store tests.
-- Every store runs the shared benchmarks in `src/lib/store/__tests__/benchmarks.ts`. A new store gets a `<name>.bench.ts` file and a `benchmark.include` entry in `vitest.config.ts`.
-- `vitest bench` names each benchmark project `<project> (bench)`.
-- The `performance-check` workflow runs only on a pull request with the `performance-check` label. Use the label on a pull request that changes performance. It runs the benchmarks of the base branch and of the pull request in turns on one runner, and posts the results as one comment, which each run updates. The check is not required on `main`, so it does not block a merge.
-- The check fails when a case goes over its budget in `scripts/bench-budgets.ts`. For the memory store and the limiter, it also fails when the median of three rounds is more than 10% slower than the base branch, and every pull request round is slower than every base round. The network stores move by up to 80% between runs on one runner, so they check only their budgets. `scripts/bench-report.ts` makes these decisions and writes the comment.
-- The budgets are mean latencies on a GitHub-hosted runner, in microseconds. Results move by up to 2x between runners, so a budget is 2x the slowest CI result. A local run can go over a budget on a slower machine. When a change makes a case faster, the comment proposes a lower budget. Do not raise a budget without a reason in the pull request.

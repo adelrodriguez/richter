@@ -1,0 +1,8 @@
+# Benchmarks
+
+- `pnpm run bench` runs the benchmarks that need no server: the memory store and the limiter. Each store has its own script: `bench:redis-store`, `bench:valkey-store`, and `bench:bun-redis-store`. They need the same server as the store tests.
+- Every store runs the shared benchmarks in `src/lib/store/__tests__/benchmarks.ts`. A new store gets a `<name>.bench.ts` file and a `benchmark.include` entry in `vitest.config.ts`.
+- `vitest bench` names each benchmark project `<project> (bench)`.
+- The `performance-check` workflow runs only on a pull request with the `performance-check` label. Use the label on a pull request that changes performance. It runs the benchmarks of the base branch and of the pull request in turns on one runner, and posts the results as one comment, which each run updates. The check is not required on `main`, so it does not block a merge.
+- The check fails when a case goes over its budget in `scripts/bench-budgets.ts`. For the memory store and the limiter, it also fails when the median of three rounds is more than 10% slower than the base branch, and every pull request round is slower than every base round. The network stores move by up to 80% between runs on one runner, so they check only their budgets. `scripts/bench-report.ts` makes these decisions and writes the comment.
+- The budgets are mean latencies on a GitHub-hosted runner, in microseconds. Results move by up to 2x between runners, so a budget is 2x the slowest CI result. A local run can go over a budget on a slower machine. When a change makes a case faster, the comment proposes a lower budget. Do not raise a budget without a reason in the pull request.
