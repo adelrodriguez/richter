@@ -1,3 +1,5 @@
+import { setFlagsFromString } from "node:v8"
+import { runInNewContext } from "node:vm"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { StoreTimeoutError } from "#lib/limiter/errors.ts"
 import { storeTimer } from "#lib/limiter/store-timer.ts"
@@ -5,6 +7,11 @@ import { storeTimer } from "#lib/limiter/store-timer.ts"
 function never() {
   return Promise.withResolvers<never>().promise
 }
+
+setFlagsFromString("--expose-gc")
+const gc = runInNewContext("gc") as () => void
+// Taken before the fake timers replace it. A weak reference clears only after the current task.
+const nextTask = globalThis.setImmediate
 
 describe("storeTimer", () => {
   beforeEach(() => {
@@ -82,5 +89,55 @@ describe("storeTimer", () => {
     resolve("late")
 
     await expect(call).rejects.toBeInstanceOf(StoreTimeoutError)
+  })
+
+  it("measures the timeout on a clock that the system time does not move", async () => {
+    const watch = storeTimer(50)
+    const call = watch(never())
+    const settled = vi.fn()
+    call.catch(settled)
+
+    await vi.advanceTimersByTimeAsync(10)
+    vi.setSystemTime(Date.now() - 250)
+    await vi.advanceTimersByTimeAsync(40)
+
+    expect(settled).toHaveBeenCalledWith(new StoreTimeoutError(50))
+  })
+
+  it("lets answered calls go while a timed-out call is still pending", async () => {
+    const watch = storeTimer(100)
+    const stuck = never()
+    watch(stuck).catch(vi.fn())
+
+    await vi.advanceTimersByTimeAsync(50)
+    let next = Promise.withResolvers<string>()
+    let current = watch(next.promise)
+    await vi.advanceTimersByTimeAsync(50)
+
+    gc()
+    const before = process.memoryUsage().heapUsed
+
+    // One call is always pending, so the queue never empties while the calls answer.
+    for (let index = 0; index < 50_000; index += 1) {
+      const answer = next
+      const call = current
+      next = Promise.withResolvers<string>()
+      current = watch(next.promise)
+      answer.resolve("ok")
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each call answers before the next one starts.
+      await call
+    }
+    next.resolve("ok")
+    await current
+
+    await new Promise((resolve) => {
+      nextTask(resolve)
+    })
+    gc()
+
+    // Each call that the stuck call kept would hold about 170 bytes, so 50,000 calls would hold about 8 MB.
+    expect(process.memoryUsage().heapUsed - before).toBeLessThan(1_000_000)
+    // The stuck call stays pending until here.
+    expect(stuck).toBeInstanceOf(Promise)
   })
 })
