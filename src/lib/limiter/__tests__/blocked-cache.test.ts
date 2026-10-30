@@ -32,6 +32,17 @@ describe("blockedCache", () => {
     expect(cache.lookup("k", 3)).toBeUndefined()
   })
 
+  // A forgotten block only sends the next request to the store, so a limit is safe here.
+  it("forgets the oldest block once it holds 10,000", () => {
+    const cache = blockedCache()
+
+    for (let index = 0; index <= 10_000; index += 1) cache.block(`k${index}`, 1, denial)
+
+    expect(cache.lookup("k0", 1)).toBeUndefined()
+    expect(cache.lookup("k1", 1)).toBeDefined()
+    expect(cache.lookup("k10000", 1)).toBeDefined()
+  })
+
   it("forgets a cleared key", () => {
     const cache = blockedCache()
     cache.block("k", 2, denial)

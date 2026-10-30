@@ -15,8 +15,12 @@ type Block = {
 // reset. A block answers only the cost it was denied for: a larger cost is denied too, but its reset
 // is later and depends on the algorithm, so the store must say when. The block lasts as long as the store said to wait, measured on the local clock,
 // so a local clock that differs from the store's clock does not change its length.
+// It holds at most `LIMIT` blocks, because callers can choose their identities. A forgotten block is
+// safe: the next request for it asks the store.
+const LIMIT = 10_000
+
 export function blockedCache() {
-  const blocks = expiringMap<Block>()
+  const blocks = expiringMap<Block>({ limit: LIMIT })
 
   return {
     block(key: string, cost: number, { now, remaining, reset }: StoreResult) {
