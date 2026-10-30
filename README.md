@@ -222,6 +222,8 @@ When every limiter allows the request, the result is the allowed result with the
 
 Limiters that ran before a denial have already spent. Put the broadest limit, such as a global daily total, last: then only requests that pass the narrower limits spend from it.
 
+A denial that this process remembers (see `cache`) stops the request before any limiter spends, wherever its limiter is in the array. When a caller has used up a broad limit, each of their requests is then denied in memory, with no store call, until the limit resets. The result's `results` holds only that denial.
+
 ### Read and clear counts
 
 ```typescript

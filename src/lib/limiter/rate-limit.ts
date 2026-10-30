@@ -41,23 +41,43 @@ export async function rateLimit<Input>(
 ): Promise<LimitResult | LimitResults> {
   if (internal in limiters) {
     checkCost(limiters, cost)
-    return limiters[internal].consume(input, cost)
+    const key = await limiters[internal].key(input)
+    return limiters[internal].blocked(key, cost) ?? limiters[internal].consume(key, cost)
   }
 
   // Check every cost first, so an invalid cost spends nothing.
   for (const limiter of limiters) checkCost(limiter, cost)
 
+  // Check every remembered denial next, so a limiter that is blocked in this process stops the
+  // request before an earlier limiter spends.
   const [first, ...rest] = limiters
-  const head = await first[internal].consume(input, cost)
+  const firstKey = await first[internal].key(input)
+  const firstBlocked = first[internal].blocked(firstKey, cost)
+
+  if (firstBlocked !== undefined) return { ...firstBlocked, results: [firstBlocked] }
+
+  const others: Array<readonly [Limiter<Input>, string]> = []
+
+  for (const limiter of rest) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- A remembered denial stops later limiters from running identify.
+    const key = await limiter[internal].key(input)
+    const blocked = limiter[internal].blocked(key, cost)
+
+    if (blocked !== undefined) return { ...blocked, results: [blocked] }
+
+    others.push([limiter, key])
+  }
+
+  const head = await first[internal].consume(firstKey, cost)
   const results = [head]
 
   if (!head.success) return { ...head, results }
 
   let tightest: AllowedResult = head
 
-  for (const limiter of rest) {
+  for (const [limiter, key] of others) {
     // oxlint-disable-next-line eslint/no-await-in-loop -- Limiters run in order, so a denial stops later limiters from spending.
-    const result = await limiter[internal].consume(input, cost)
+    const result = await limiter[internal].consume(key, cost)
     results.push(result)
 
     if (!result.success) return { ...result, results }

@@ -146,6 +146,51 @@ describe("rateLimit", () => {
       await expect(rateLimit([large, small], "k", { cost: 5 })).rejects.toThrow(InvalidOptionError)
       expect(requests).toHaveLength(0)
     })
+
+    it("answers a remembered denial of a later limiter before any limiter spends", async () => {
+      const { requests, store } = recordingStore()
+      const limiter = buildLimiter({ store })
+      const narrow = limiter({ algorithm: threePerMinute, name: "narrow" })
+      const broad = limiter({ algorithm: fixedWindow({ limit: 1, window: 60_000 }), name: "broad" })
+      await rateLimit([narrow, broad], "k")
+      await rateLimit([narrow, broad], "k")
+      requests.length = 0
+
+      const result = await rateLimit([narrow, broad], "k")
+
+      expect(result).toMatchObject({ name: "broad", reason: "cache", success: false })
+      expect(result.results).toHaveLength(1)
+      expect(requests).toHaveLength(0)
+      await expect(remaining(narrow, "k")).resolves.toMatchObject({ remaining: 1 })
+    })
+
+    it("does not run later identify functions after a remembered denial", async () => {
+      const identified: string[] = []
+      const limiter = buildLimiter({ store: memoryStore() })
+      const blocked = limiter({
+        algorithm: fixedWindow({ limit: 1, window: 60_000 }),
+        identify: (input: string) => {
+          identified.push("blocked")
+          return input
+        },
+        name: "blocked",
+      })
+      const later = limiter({
+        algorithm: threePerMinute,
+        identify: (input: string) => {
+          identified.push("later")
+          return input
+        },
+        name: "later",
+      })
+      await rateLimit(blocked, "k")
+      await rateLimit(blocked, "k")
+      identified.length = 0
+
+      await rateLimit([blocked, later], "k")
+
+      expect(identified).toEqual(["blocked"])
+    })
   })
 })
 
