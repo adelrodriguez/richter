@@ -70,12 +70,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Checkout base branch
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -127,7 +130,9 @@ jobs:
           path: bench-results/
 
   # It reports the stores that finished, also when another store fails, and it is skipped when the
-  # benchmarks are skipped.
+  # benchmarks are skipped. It runs the report script from the base branch, with a read-only token,
+  # so code from the pull request never runs where a token can write. A change to the script or the
+  # budgets therefore takes effect after it merges.
   report:
     name: performance-check
     needs: bench
@@ -139,11 +144,13 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read
-      pull-requests: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout base branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -177,6 +184,39 @@ jobs:
           cat comment.md >> "$GITHUB_STEP_SUMMARY"
           echo "status=$status" >> "$GITHUB_OUTPUT"
 
+      - name: Upload comment
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-comment
+          path: comment.md
+
+      # After the upload, so a failed check still posts its results.
+      - name: Fail on a regression or a case over budget
+        if: steps.report.outputs.status != '0'
+        run: |
+          echo "::error::A benchmark regressed or went over its budget. See the pull request comment."
+          exit 1
+
+  # The only job with a token that can write. It runs no code from the repository: it posts the
+  # comment that the report job wrote.
+  comment:
+    name: performance-check comment
+    needs: report
+    if: ${{ !cancelled() && needs.report.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-comment
+      cancel-in-progress: true
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Download comment
+        uses: actions/download-artifact@v8
+        with:
+          name: performance-comment
+
       - name: Post comment
         env:
           GH_TOKEN: ${{ github.token }}
@@ -190,10 +230,3 @@ jobs:
           else
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
           fi
-
-      # After the comment, so a failed check still shows its results.
-      - name: Fail on a regression or a case over budget
-        if: steps.report.outputs.status != '0'
-        run: |
-          echo "::error::A benchmark regressed or went over its budget. See the pull request comment."
-          exit 1
