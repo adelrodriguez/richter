@@ -48,6 +48,10 @@ export const budgets: Record<string, Record<string, Record<string, number>>> = {
       rateLimit: 4.6,
       "store.consume": 0.68,
     },
+    "several limiters": {
+      allowed: 5.4,
+      "broad limit blocked": 2.6,
+    },
   },
   "redisStore with ioredis": {
     fixedWindow: {

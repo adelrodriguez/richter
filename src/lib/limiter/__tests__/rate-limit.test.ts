@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Limiter } from "#lib/limiter/build-limiter.ts"
+import type { Store, StoreRequest } from "#lib/store/store.ts"
 import { fixedWindow } from "#lib/algorithms/algorithms.ts"
 import { buildLimiter } from "#lib/limiter/build-limiter.ts"
 import { StoreError } from "#lib/limiter/errors.ts"
@@ -145,6 +146,83 @@ describe("rateLimit", () => {
 
       await expect(rateLimit([large, small], "k", { cost: 5 })).rejects.toThrow(InvalidOptionError)
       expect(requests).toHaveLength(0)
+    })
+
+    it("answers a remembered denial of a later limiter before any limiter spends", async () => {
+      const { requests, store } = recordingStore()
+      const limiter = buildLimiter({ store })
+      const narrow = limiter({ algorithm: threePerMinute, name: "narrow" })
+      const broad = limiter({ algorithm: fixedWindow({ limit: 1, window: 60_000 }), name: "broad" })
+      await rateLimit([narrow, broad], "k")
+      await rateLimit([narrow, broad], "k")
+      requests.length = 0
+
+      const result = await rateLimit([narrow, broad], "k")
+
+      expect(result).toMatchObject({ name: "broad", reason: "cache", success: false })
+      expect(result.results).toHaveLength(1)
+      expect(requests).toHaveLength(0)
+      await expect(remaining(narrow, "k")).resolves.toMatchObject({ remaining: 1 })
+    })
+
+    it("uses a denial remembered while an earlier limiter waits for the store", async () => {
+      const memory = memoryStore()
+      const paused = Promise.withResolvers<undefined>()
+      let broadFails = false
+      let broadCalls = 0
+      const store: Store = {
+        clear: memory.clear,
+        consume: async (request: StoreRequest) => {
+          if (request.key.startsWith("narrow:")) await paused.promise
+          if (request.key.startsWith("broad:")) {
+            broadCalls += 1
+            if (broadFails) throw new Error("connection refused")
+          }
+          return memory.consume(request)
+        },
+      }
+      const limiter = buildLimiter({ store })
+      const narrow = limiter({ algorithm: threePerMinute, name: "narrow" })
+      const broad = limiter({ algorithm: fixedWindow({ limit: 1, window: 60_000 }), name: "broad" })
+      await rateLimit(broad, "k")
+
+      const chain = rateLimit([narrow, broad], "k")
+      await expect(rateLimit(broad, "k")).resolves.toMatchObject({ reason: "store" })
+      broadFails = true
+      paused.resolve()
+      const result = await chain
+
+      expect(result).toMatchObject({ name: "broad", reason: "cache", success: false })
+      expect(result.results.map((each) => each.name)).toEqual(["narrow", "broad"])
+      expect(broadCalls).toBe(2)
+    })
+
+    it("does not run later identify functions after a remembered denial", async () => {
+      const identified: string[] = []
+      const limiter = buildLimiter({ store: memoryStore() })
+      const blocked = limiter({
+        algorithm: fixedWindow({ limit: 1, window: 60_000 }),
+        identify: (input: string) => {
+          identified.push("blocked")
+          return input
+        },
+        name: "blocked",
+      })
+      const later = limiter({
+        algorithm: threePerMinute,
+        identify: (input: string) => {
+          identified.push("later")
+          return input
+        },
+        name: "later",
+      })
+      await rateLimit(blocked, "k")
+      await rateLimit(blocked, "k")
+      identified.length = 0
+
+      await rateLimit([blocked, later], "k")
+
+      expect(identified).toEqual(["blocked"])
     })
   })
 })
