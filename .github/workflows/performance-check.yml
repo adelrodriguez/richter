@@ -70,12 +70,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Checkout base branch
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -127,7 +130,9 @@ jobs:
           path: bench-results/
 
   # It reports the stores that finished, also when another store fails, and it is skipped when the
-  # benchmarks are skipped.
+  # benchmarks are skipped. It runs the report script from the base branch, with a read-only token,
+  # so code from the pull request never runs where a token can write. A change to the script or the
+  # budgets therefore takes effect after it merges.
   report:
     name: performance-check
     needs: bench
@@ -139,11 +144,17 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read
-      pull-requests: write
+    # A job output, not an artifact: the bench jobs run pull request code that can upload artifacts
+    # to this run, but no other job can set this job's outputs.
+    outputs:
+      comment: ${{ steps.report.outputs.comment }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout base branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -175,13 +186,44 @@ jobs:
             cat report.md
           } > comment.md
           cat comment.md >> "$GITHUB_STEP_SUMMARY"
-          echo "status=$status" >> "$GITHUB_OUTPUT"
+          # A random delimiter, so no line of the report can end the output early.
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "status=$status"
+            echo "comment<<$delimiter"
+            cat comment.md
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
 
+      # The comment job still posts the results of a failed check.
+      - name: Fail on a regression or a case over budget
+        if: steps.report.outputs.status != '0'
+        run: |
+          echo "::error::A benchmark regressed or went over its budget. See the pull request comment."
+          exit 1
+
+  # The only job with a token that can write. It runs no code from the repository: it posts the
+  # comment that the report job wrote.
+  comment:
+    name: performance-check comment
+    needs: report
+    if: ${{ !cancelled() && needs.report.outputs.comment != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-comment
+      cancel-in-progress: true
+    permissions:
+      pull-requests: write
+
+    steps:
       - name: Post comment
         env:
+          BODY: ${{ needs.report.outputs.comment }}
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
+          printf '%s\n' "$BODY" > comment.md
           id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
             --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- performance-check -->"))) | .id' \
             | head -n 1)
@@ -190,10 +232,3 @@ jobs:
           else
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
           fi
-
-      # After the comment, so a failed check still shows its results.
-      - name: Fail on a regression or a case over budget
-        if: steps.report.outputs.status != '0'
-        run: |
-          echo "::error::A benchmark regressed or went over its budget. See the pull request comment."
-          exit 1
