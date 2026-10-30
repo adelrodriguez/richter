@@ -53,7 +53,7 @@ You define limiters once and run them with plain functions. richter has no frame
 pnpm add richter
 ```
 
-You can also use Bun, npm, or Yarn. richter needs Node.js 20 or later, or Bun.
+You can also use Bun, npm, or Yarn. richter needs Node.js 22 or later, or Bun 1.4 or later.
 
 ## Get started
 

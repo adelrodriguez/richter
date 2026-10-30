@@ -145,9 +145,10 @@ jobs:
       - name: Run Bun store tests
         run: pnpm run test:bun-redis-store
 
-  # Vitest needs a newer Node.js version than the `engines.node` floor. Build with the default
-  # Node.js version, then run the built package on the exact floor.
-  compat:
+  # Each supported runtime runs the built package on its floor, with the checks in `scripts/compat`.
+  # Vitest needs a newer Node.js version than the floor, so each job builds with the default Node.js
+  # version first. A new runtime gets its own `compat-<runtime>` job and entry file.
+  compat-node:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -174,7 +175,39 @@ jobs:
         uses: actions/setup-node@v7
         with:
           # Keep equal to the `engines.node` floor in package.json.
-          node-version: "20.0.0"
+          node-version: "22.0.0"
 
       - name: Run compatibility smoke test
-        run: node scripts/compat-smoke.mjs dist
+        run: node scripts/compat/node.mjs dist
+
+  compat-bun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ".node-version"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Setup minimum Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          # Keep equal to the `engines.bun` floor in package.json.
+          bun-version: "1.4.0"
+
+      - name: Run compatibility smoke test
+        run: bun scripts/compat/bun.mjs dist
