@@ -16,11 +16,12 @@ type Block = {
 // is later and depends on the algorithm, so the store must say when. The block lasts as long as the store said to wait, measured on the local clock,
 // so a local clock that differs from the store's clock does not change its length.
 export function blockedCache() {
-  const blocks = expiringMap<Block>(Date.now)
+  const blocks = expiringMap<Block>()
 
   return {
     block(key: string, cost: number, { now, remaining, reset }: StoreResult) {
-      blocks.set(key, { cost, expiresAt: Date.now() + (reset - now), remaining, reset })
+      const localNow = Date.now()
+      blocks.set(key, { cost, expiresAt: localNow + (reset - now), remaining, reset }, localNow)
     },
 
     clear(key: string) {
@@ -28,14 +29,15 @@ export function blockedCache() {
     },
 
     lookup(key: string, cost: number) {
-      const block = blocks.get(key)
+      const now = Date.now()
+      const block = blocks.get(key, now)
 
       if (block === undefined || cost !== block.cost) return
 
       return {
         remaining: block.remaining,
         reset: block.reset,
-        retryAfter: Math.max(0, block.expiresAt - Date.now()),
+        retryAfter: Math.max(0, block.expiresAt - now),
       }
     },
   }

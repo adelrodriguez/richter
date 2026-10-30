@@ -41,7 +41,7 @@ export type MemoryStoreOptions = {
  * all counts. Use it for tests, single-instance applications, and as a fallback store.
  */
 export function memoryStore({ clock = Date.now }: MemoryStoreOptions = {}): Store {
-  const states = expiringMap<State>(clock)
+  const states = expiringMap<State>()
 
   return {
     clear: (key) => {
@@ -52,7 +52,7 @@ export function memoryStore({ clock = Date.now }: MemoryStoreOptions = {}): Stor
     // JavaScript runs this body to completion before any other call, so each call is atomic.
     consume: ({ key, algorithm, cost }) => {
       const now = clock()
-      const state = states.get(key)
+      const state = states.get(key, now)
       const transition =
         algorithm.type === "fixedWindow"
           ? applyFixedWindow(algorithm, state, cost, now)
@@ -61,7 +61,7 @@ export function memoryStore({ clock = Date.now }: MemoryStoreOptions = {}): Stor
             : applyTokenBucket(algorithm, state, cost, now)
 
       // A cost of 0 reads without writing.
-      if (cost > 0 && transition.state !== undefined) states.set(key, transition.state)
+      if (cost > 0 && transition.state !== undefined) states.set(key, transition.state, now)
 
       return Promise.resolve(transition.result)
     },
