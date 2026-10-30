@@ -78,6 +78,7 @@ Packref provides local copies of dependency source code so you can inspect the e
 
 ## Tests
 
+- A source file's tests live next to it in `__tests__/<file>.test.ts`, and test that file. Helpers that several test files share go in a plain `__tests__/<name>.ts` file.
 - `pnpm run test` runs the unit tests, which need no server. Each store has its own Vitest project and script: `test:redis-store`, `test:valkey-store`, and `test:bun-redis-store`. CI runs each as its own job.
 - The store tests need a server at `REDIS_URL`, which defaults to `redis://localhost:6379`. Start one with `docker run --rm -p 6379:6379 redis:8`, or `valkey/valkey:8` for the Valkey store.
 - `test:bun-redis-store` runs Vitest on Bun, so it needs Bun installed.
