@@ -78,7 +78,8 @@
     "release": "changeset publish",
     "test": "vitest run --project unit",
     "test:bun-redis-store": "bun --bun vitest run --project bun-redis-store",
-    "test:compat": "pnpm run build && node scripts/compat-smoke.mjs dist",
+    "test:compat:bun": "pnpm run build && bun scripts/compat/bun.mjs dist",
+    "test:compat:node": "pnpm run build && node scripts/compat/node.mjs dist",
     "test:coverage": "vitest run --project unit --coverage",
     "test:redis-store": "vitest run --project redis-store",
     "test:valkey-store": "vitest run --project valkey-store",
@@ -104,6 +105,7 @@
     "vitest": "5.0.3"
   },
   "engines": {
+    "bun": ">=1.4.0",
     "node": ">=22.0.0"
   },
   "packageManager": "pnpm@12.9.1"

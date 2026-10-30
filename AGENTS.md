@@ -83,6 +83,7 @@ Packref provides local copies of dependency source code so you can inspect the e
 - `test:bun-redis-store` runs Vitest on Bun, so it needs Bun installed.
 - `script-store.test.ts` tests the scripts themselves and runs with both the Redis and the Valkey store tests.
 - Every store runs the shared suite in `src/lib/store/__tests__/conformance.ts`. A new store must pass it.
+- Each supported runtime runs the built package on its floor. `scripts/compat/smoke.mjs` holds the checks and imports nothing. Each runtime has an entry file in `scripts/compat/` and a `compat-<runtime>` job in `test.yml`, which pins the floor from `engines` in `package.json`. To add a runtime such as workerd, add an entry file that loads `dist/` and calls `smoke`, and add its job.
 
 ## Benchmarks
 
