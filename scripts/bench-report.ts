@@ -45,6 +45,18 @@ function median(values: number[]) {
     : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
 }
 
+// Group, algorithm and case names come from the pull request's benchmark files, so a name must not
+// add Markdown, HTML, links or mentions to the comment. GitHub renders a code span as literal text,
+// so each name becomes one, without backticks or line breaks that could end it.
+function code(name: string) {
+  return `\`${name.slice(0, 100).replaceAll(/[\p{Cc}`]+/gu, " ")}\``
+}
+
+// In a table, a pipe ends the cell even inside a code span, unless it is escaped.
+function cell(name: string) {
+  return code(name).replaceAll("|", "\\|")
+}
+
 // The mean of each round, by group, algorithm and case, in microseconds.
 function read(directory: string, pattern: RegExp) {
   const results = new Map<string, Map<string, Map<string, number[]>>>()
@@ -59,6 +71,7 @@ function read(directory: string, pattern: RegExp) {
       const cases = algorithms.get(test.title) ?? new Map<string, number[]>()
 
       for (const task of test.benchmarks.flatMap((benchmark) => benchmark.tasks)) {
+        if (!Number.isFinite(task.latency.mean)) continue
         cases.set(task.name, [...(cases.get(task.name) ?? []), task.latency.mean * 1000])
       }
 
@@ -121,7 +134,7 @@ for (const { gated, name } of stores) {
 
           if (budget !== undefined && roundUp(after * 2) < budget) {
             lowerBudgets.push(
-              `| ${group} | ${algorithm} | ${caseName} | ${formatTime(budget)} | ${formatTime(roundUp(after * 2))} |`
+              `| ${cell(group)} | ${cell(algorithm)} | ${cell(caseName)} | ${formatTime(budget)} | ${formatTime(roundUp(after * 2))} |`
             )
           }
         }
@@ -132,8 +145,8 @@ for (const { gated, name } of stores) {
 
         rows.push(
           [
-            algorithm,
-            caseName,
+            cell(algorithm),
+            cell(caseName),
             before ? formatTime(median(before)) : "—",
             formatTime(after),
             percent === undefined ? "—" : `${percent > 0 ? "+" : ""}${percent}%`,
@@ -146,7 +159,7 @@ for (const { gated, name } of stores) {
 
     sections.push(
       [
-        `### ${group}`,
+        `### ${code(group)}`,
         "",
         ...(gated
           ? []
