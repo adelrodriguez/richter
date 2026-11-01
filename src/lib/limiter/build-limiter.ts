@@ -113,7 +113,15 @@ export const internal = Symbol("richter.limiter")
 
 type Internal<Input> = {
   readonly capacity: number
-  readonly consume: (input: Input, cost: number) => Promise<LimitResult>
+  readonly key: (input: Input) => Promise<string>
+  /**
+   * The denial this process remembers for `key` and `cost`, without the store.
+   */
+  readonly blocked: (key: string, cost: number) => DeniedResult | undefined
+  /**
+   * Spends `cost` units in the store. It does not look at remembered denials.
+   */
+  readonly consume: (key: string, cost: number) => Promise<LimitResult>
   readonly read: (input: Input) => Promise<Remaining>
   readonly clear: (input: Input) => Promise<void>
 }
@@ -174,6 +182,14 @@ export function buildLimiter<Supported extends Algorithm>({
 
     return {
       [internal]: {
+        blocked: (key, cost) => {
+          const blocked = mode === "enforce" ? blocks?.lookup(key, cost) : undefined
+
+          if (blocked === undefined) return
+
+          return { ...blocked, limit, name, reason: "cache", success: false, window }
+        },
+
         capacity: limit,
 
         clear: async (input) => {
@@ -187,14 +203,7 @@ export function buildLimiter<Supported extends Algorithm>({
           }
         },
 
-        consume: async (input, cost) => {
-          const key = await keyFor(input)
-          const blocked = mode === "enforce" ? blocks?.lookup(key, cost) : undefined
-
-          if (blocked !== undefined) {
-            return { ...blocked, limit, name, reason: "cache", success: false, window }
-          }
-
+        consume: async (key, cost) => {
           let result: StoreResult
 
           try {
@@ -215,6 +224,8 @@ export function buildLimiter<Supported extends Algorithm>({
 
           return { ...counts(result), name, reason: "store", success: false }
         },
+
+        key: keyFor,
 
         read: async (input) => {
           const key = await keyFor(input)
