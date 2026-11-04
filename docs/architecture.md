@@ -1,6 +1,6 @@
 # Architecture
 
-- `src/lib` holds one folder per domain. Dependencies point one way: `options` and `expiring-map` ← `algorithms` ← `store` (the contract) ← `stores/*` and `limiter`. `oxlint.config.ts` enforces this.
+- `src/lib` holds one folder per domain. Dependencies point one way: `options` and `expiring-map` ← `algorithms` ← `store` (the contract) ← `stores/*` and `limiter`. `oxlint.config.ts` enforces this for every source file, at every depth. A new folder in `src/lib` may import nothing else in lib until it has a rule there and a place in this list.
 - A folder imports its own files with `./`, and other folders with `#lib/...`.
 - A new store goes in `src/lib/stores/<name>/`, with its public entry in `src/stores/<name>.ts`, a `./stores/<name>` export in `package.json`, and an entry in `tsdown.config.ts`. The lint rules already cover it.
 - An error class lives with the code that throws it.
