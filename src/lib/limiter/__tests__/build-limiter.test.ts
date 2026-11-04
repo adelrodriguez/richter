@@ -75,9 +75,12 @@ describe("buildLimiter", () => {
   })
 
   it("rejects a timeout that is not a positive integer", () => {
-    expect(() =>
-      buildLimiter({ store: memoryStore(), timeout: 0 })({ algorithm: threePerMinute, name: "x" })
-    ).toThrow(InvalidOptionError)
+    const limiter = buildLimiter({ store: memoryStore() })
+
+    expect(() => buildLimiter({ store: memoryStore(), timeout: 0 })).toThrow(InvalidOptionError)
+    expect(() => limiter({ algorithm: threePerMinute, name: "x", timeout: 0 })).toThrow(
+      InvalidOptionError
+    )
   })
 
   it("lets limiter settings override factory settings", async () => {
