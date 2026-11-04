@@ -115,13 +115,14 @@ type Internal<Input> = {
   readonly capacity: number
   readonly key: (input: Input) => Promise<string>
   /**
-   * The denial this process remembers for `key` and `cost`, without the store.
+   * The denial this process remembers for `key` and `cost`. It spends nothing.
    */
   readonly blocked: (key: string, cost: number) => DeniedResult | undefined
   /**
-   * Spends `cost` units in the store. It does not look at remembered denials.
+   * Answers with the denial this process remembers for `key` and `cost`, or spends `cost` units in
+   * the store. A remembered denial comes back without a promise, so it costs no extra microtask.
    */
-  readonly consume: (key: string, cost: number) => Promise<LimitResult>
+  readonly spend: (key: string, cost: number) => DeniedResult | Promise<LimitResult>
   readonly read: (input: Input) => Promise<Remaining>
   readonly clear: (input: Input) => Promise<void>
 }
@@ -160,7 +161,9 @@ export function buildLimiter<Supported extends Algorithm>({
     const name = printable("name", options.name)
     const { algorithm } = options
     const mode = options.mode ?? defaults.mode ?? "enforce"
-    const blocks = (options.cache ?? defaults.cache ?? true) ? blockedCache() : undefined
+    // A dry-run limiter lets every denial through, so it has no denials to remember.
+    const blocks =
+      mode === "enforce" && (options.cache ?? defaults.cache ?? true) ? blockedCache() : undefined
     const limit = capacityOf(algorithm)
     const window = windowOf(algorithm)
     const watch = storeTimer(
@@ -179,15 +182,40 @@ export function buildLimiter<Supported extends Algorithm>({
       return { limit, remaining, reset, retryAfter: Math.max(0, reset - now), window }
     }
 
+    function blocked(key: string, cost: number): DeniedResult | undefined {
+      const block = blocks?.lookup(key, cost)
+
+      if (block === undefined) return
+
+      return { ...block, limit, name, reason: "cache", success: false, window }
+    }
+
+    // Spends in the store without looking at remembered denials, so only `spend` calls it.
+    async function consume(key: string, cost: number): Promise<LimitResult> {
+      let result: StoreResult
+
+      try {
+        result = await ask(key, cost)
+      } catch (error) {
+        return { error: new StoreError(error), name, reason: "storeError", success: false }
+      }
+
+      if (result.success) {
+        return { ...counts(result), mode, name, reason: "store", success: true }
+      }
+
+      if (mode === "dryRun") {
+        return { ...counts(result), mode, name, reason: "dryRun", success: true }
+      }
+
+      blocks?.block(key, cost, result)
+
+      return { ...counts(result), name, reason: "store", success: false }
+    }
+
     return {
       [internal]: {
-        blocked: (key, cost) => {
-          const blocked = mode === "enforce" ? blocks?.lookup(key, cost) : undefined
-
-          if (blocked === undefined) return
-
-          return { ...blocked, limit, name, reason: "cache", success: false, window }
-        },
+        blocked,
 
         capacity: limit,
 
@@ -202,28 +230,6 @@ export function buildLimiter<Supported extends Algorithm>({
           }
         },
 
-        consume: async (key, cost) => {
-          let result: StoreResult
-
-          try {
-            result = await ask(key, cost)
-          } catch (error) {
-            return { error: new StoreError(error), name, reason: "storeError", success: false }
-          }
-
-          if (result.success) {
-            return { ...counts(result), mode, name, reason: "store", success: true }
-          }
-
-          if (mode === "dryRun") {
-            return { ...counts(result), mode, name, reason: "dryRun", success: true }
-          }
-
-          blocks?.block(key, cost, result)
-
-          return { ...counts(result), name, reason: "store", success: false }
-        },
-
         key: keyFor,
 
         read: async (input) => {
@@ -236,6 +242,8 @@ export function buildLimiter<Supported extends Algorithm>({
             throw new StoreError(error)
           }
         },
+
+        spend: (key, cost) => blocked(key, cost) ?? consume(key, cost),
       },
       name,
     }
