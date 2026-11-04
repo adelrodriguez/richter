@@ -2,7 +2,7 @@
 
 - `src/lib` holds one folder per domain. Dependencies point one way: `options` and `expiring-map` ← `algorithms` ← `store` (the contract) ← `transitions` ← `stores/*`, and `store` ← `limiter`. `oxlint.config.ts` enforces this for every source file, at every depth. A new folder in `src/lib` may import nothing else in lib until it has a rule there and a place in this list.
 - A folder imports its own files with `./`, and other folders with `#lib/...`.
-- A new store goes in `src/lib/stores/<name>/`, with its public entry in `src/stores/<name>.ts`, a `./stores/<name>` export in `package.json`, and an entry in `tsdown.config.ts`. The lint rules already cover it.
+- A new store goes in `src/lib/stores/<name>/`, with its public entry in `src/stores/<name>.ts` and a `./stores/<name>` export in `package.json`. The build makes an entry from every file in `src/stores/`, and `pnpm run build:verify` fails when one has no export. The lint rules already cover it.
 - `src/lib/transitions/` holds the arithmetic of every algorithm in JavaScript. A store that runs JavaScript, such as the memory store, applies an algorithm with `transition` and writes the state it returns. The Redis scripts match it line for line.
 - An error class lives with the code that throws it.
 - The Redis scripts are plain `.lua` files. `scripts.macro.ts` inlines them into the bundle at build time through `unplugin-macros`, so the package never reads files at run time.
