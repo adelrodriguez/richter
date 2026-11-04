@@ -1,5 +1,6 @@
 import { Redis } from "ioredis"
 import { afterAll, describe, expect, it } from "vitest"
+import type { Algorithm } from "#lib/algorithms/algorithms.ts"
 import type { ScriptCommands } from "#lib/stores/redis/script-store.ts"
 import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
 import { memoryStore } from "#lib/stores/memory/memory-store.ts"
@@ -30,11 +31,13 @@ describe("scriptStore", () => {
   // Runs the same requests against Redis and the memory store, with the memory store's clock set to
   // the time Redis read. The scripts must then return exactly what the memory store returns, which
   // checks the Lua arithmetic at real timestamps, across window boundaries, and for every cost.
-  it.each([
-    fixedWindow({ limit: 5, window: 100 }),
-    slidingWindow({ limit: 5, window: 100 }),
-    tokenBucket({ capacity: 5, interval: 100, refillRate: 2 }),
-  ])("returns what the memory store returns for $type", async (algorithm) => {
+  it.each(
+    Object.values({
+      fixedWindow: fixedWindow({ limit: 5, window: 100 }),
+      slidingWindow: slidingWindow({ limit: 5, window: 100 }),
+      tokenBucket: tokenBucket({ capacity: 5, interval: 100, refillRate: 2 }),
+    } satisfies Record<Algorithm["type"], Algorithm>)
+  )("returns what the memory store returns for $type", async (algorithm) => {
     const redis = scriptStore(commands)
     let now = 0
     const memory = memoryStore({ clock: () => now })
@@ -84,11 +87,13 @@ describe("scriptStore", () => {
     expect(sent).toEqual(["EVALSHA"])
   })
 
-  it.each([
-    fixedWindow({ limit: 5, window: 2000 }),
-    slidingWindow({ limit: 5, window: 2000 }),
-    tokenBucket({ capacity: 5, interval: 2000, refillRate: 1 }),
-  ])("expires $type state once it no longer matters", async (algorithm) => {
+  it.each(
+    Object.values({
+      fixedWindow: fixedWindow({ limit: 5, window: 2000 }),
+      slidingWindow: slidingWindow({ limit: 5, window: 2000 }),
+      tokenBucket: tokenBucket({ capacity: 5, interval: 2000, refillRate: 1 }),
+    } satisfies Record<Algorithm["type"], Algorithm>)
+  )("expires $type state once it no longer matters", async (algorithm) => {
     const store = scriptStore(commands)
     const key = `test:${crypto.randomUUID()}`
     await store.consume({ algorithm, cost: 1, key })
@@ -99,11 +104,13 @@ describe("scriptStore", () => {
     expect(ttl).toBeLessThanOrEqual(4000)
   })
 
-  it.each([
-    fixedWindow({ limit: 5, window: week }),
-    slidingWindow({ limit: 5, window: week }),
-    tokenBucket({ capacity: 5, interval: week, refillRate: 1 }),
-  ])("expires $type state with a one-week window", async (algorithm) => {
+  it.each(
+    Object.values({
+      fixedWindow: fixedWindow({ limit: 5, window: week }),
+      slidingWindow: slidingWindow({ limit: 5, window: week }),
+      tokenBucket: tokenBucket({ capacity: 5, interval: week, refillRate: 1 }),
+    } satisfies Record<Algorithm["type"], Algorithm>)
+  )("expires $type state with a one-week window", async (algorithm) => {
     const store = scriptStore(commands)
     const key = `test:${crypto.randomUUID()}`
     await store.consume({ algorithm, cost: 1, key })
@@ -114,11 +121,13 @@ describe("scriptStore", () => {
     expect(ttl).toBeLessThanOrEqual(2 * week)
   })
 
-  it.each([
-    fixedWindow({ limit: 5, window: 2 ** 50 }),
-    slidingWindow({ limit: 5, window: 2 ** 50 }),
-    tokenBucket({ capacity: 4, interval: 2 ** 48, refillRate: 1 }),
-  ])("expires $type state with the longest period it accepts", async (algorithm) => {
+  it.each(
+    Object.values({
+      fixedWindow: fixedWindow({ limit: 5, window: 2 ** 50 }),
+      slidingWindow: slidingWindow({ limit: 5, window: 2 ** 50 }),
+      tokenBucket: tokenBucket({ capacity: 4, interval: 2 ** 48, refillRate: 1 }),
+    } satisfies Record<Algorithm["type"], Algorithm>)
+  )("expires $type state with the longest period it accepts", async (algorithm) => {
     const store = scriptStore(commands)
     const key = `test:${crypto.randomUUID()}`
     await store.consume({ algorithm, cost: 4, key })
