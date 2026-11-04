@@ -151,6 +151,7 @@ export function buildLimiter<Supported extends Algorithm>({
   ...defaults
 }: BuildLimiterOptions<Supported>): DefineLimiter<Supported> {
   const namespace = prefix === undefined ? "" : `${printable("prefix", prefix)}:`
+  const timeout = positiveInteger("timeout", defaults.timeout ?? DEFAULT_TIMEOUT)
 
   function define<Input>(
     options: LimiterOptions<Supported>,
@@ -158,15 +159,13 @@ export function buildLimiter<Supported extends Algorithm>({
   ): Limiter<Input> {
     const name = printable("name", options.name)
     const { algorithm } = options
-    const timeout = positiveInteger(
-      "timeout",
-      options.timeout ?? defaults.timeout ?? DEFAULT_TIMEOUT
-    )
     const mode = options.mode ?? defaults.mode ?? "enforce"
     const blocks = (options.cache ?? defaults.cache ?? true) ? blockedCache() : undefined
     const limit = capacityOf(algorithm)
     const window = windowOf(algorithm)
-    const watch = storeTimer(timeout)
+    const watch = storeTimer(
+      options.timeout === undefined ? timeout : positiveInteger("timeout", options.timeout)
+    )
 
     async function keyFor(input: Input) {
       return keyOf(`${namespace}${name}`, await identify(input))
