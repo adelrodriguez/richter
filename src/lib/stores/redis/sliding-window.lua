@@ -2,7 +2,7 @@
 -- Returns { success, remaining, reset, now }, with success 1 for an allowed request and 0 for a
 -- denial. Reads the clock with TIME, so every instance agrees on window boundaries. Redis 5 and later
 -- replicate a script's writes rather than the script, which makes TIME safe to call before a write.
--- The arithmetic matches the memory store line for line.
+-- The arithmetic matches `transition` in src/lib/transitions/index.ts line for line.
 
 local key = KEYS[1]
 local limit = tonumber(ARGV[1])

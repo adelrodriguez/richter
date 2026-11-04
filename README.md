@@ -455,7 +455,7 @@ A store must follow these rules:
 - **A denial changes nothing.**
 - **A cost of 0 reads without writing.**
 - **The store's own clock decides.** `now` is the store's time in epoch milliseconds.
-- **The arithmetic matches the built-in stores.** See `src/lib/stores/memory/memory-store.ts`.
+- **The arithmetic matches the built-in stores.** See `src/lib/transitions/index.ts`.
 
 A store that supports only some algorithms declares them, and TypeScript then refuses the others:
 
