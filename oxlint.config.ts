@@ -19,12 +19,13 @@ export default defineConfig({
   overrides: [
     // Dependencies inside `src/lib` point one way:
     //
-    //   options, expiring-map <- algorithms <- store <- stores/*
+    //   options, expiring-map <- algorithms <- store <- transitions <- stores/*
     //                                                <- limiter
     //
     // A folder imports its own files with `./` and other folders with `#lib/...`, so a rule can ban a
     // whole folder without banning a folder's own files. A limiter knows only the store contract,
-    // never a concrete store, and a store knows nothing of other stores or of limiters. Each rule
+    // never a concrete store or the arithmetic stores apply, and a store knows nothing of other stores
+    // or of limiters. Each rule
     // covers its folder at every depth, and a folder without a rule of its own may import nothing else
     // in lib. A later override replaces an earlier one, so the last one lets tests cross these lines.
     {
@@ -103,6 +104,23 @@ export default defineConfig({
       },
     },
     {
+      files: ["src/lib/transitions/**/*.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            patterns: [
+              entryPoints,
+              {
+                group: ["#lib/**", "!#lib/algorithms/**", "!#lib/store/**"],
+                message: "transitions import only algorithms and the store contract.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: ["src/lib/stores/**/*.ts"],
       rules: {
         "no-restricted-imports": [
@@ -129,8 +147,9 @@ export default defineConfig({
             patterns: [
               entryPoints,
               {
-                group: ["#lib/stores/**"],
-                message: "Limiters know only the store contract, not a concrete store.",
+                group: ["#lib/stores/**", "#lib/transitions/**"],
+                message:
+                  "Limiters know only the store contract, not a concrete store or its arithmetic.",
               },
             ],
           },
