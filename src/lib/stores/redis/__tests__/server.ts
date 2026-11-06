@@ -1,6 +1,6 @@
 import { expect, it } from "vitest"
-import type { Store } from "#lib/store/store.ts"
-import { fixedWindow } from "#lib/algorithms/algorithms.ts"
+import type { Store } from "#lib/store/index.ts"
+import { fixedWindow } from "#lib/algorithms/index.ts"
 
 // The tests that need a server, which every store for these servers shares.
 

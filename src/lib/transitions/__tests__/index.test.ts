@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import type { Algorithm } from "#lib/algorithms/algorithms.ts"
+import type { Algorithm } from "#lib/algorithms/index.ts"
 import type { State } from "#lib/transitions/index.ts"
-import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
+import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/index.ts"
 import { transition } from "#lib/transitions/index.ts"
 
 // Sends requests for one key one after another, and keeps the state each transition returns, as a

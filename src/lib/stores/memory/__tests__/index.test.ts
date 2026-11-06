@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { fixedWindow } from "#lib/algorithms/algorithms.ts"
+import { fixedWindow } from "#lib/algorithms/index.ts"
 import { testStore } from "#lib/store/__tests__/conformance.ts"
-import { memoryStore } from "#lib/stores/memory/memory-store.ts"
+import { memoryStore } from "#lib/stores/memory/index.ts"
 
 // The arithmetic has its own tests in `src/lib/transitions/__tests__/index.test.ts`.
 describe("memoryStore", () => {

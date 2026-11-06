@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 import type { Identity } from "#lib/limiter/identity.ts"
-import { fixedWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
+import { fixedWindow, tokenBucket } from "#lib/algorithms/index.ts"
 import { buildLimiter } from "#lib/limiter/build-limiter.ts"
 import { StoreError, StoreTimeoutError } from "#lib/limiter/errors.ts"
 import { rateLimit } from "#lib/limiter/rate-limit.ts"
-import { InvalidOptionError } from "#lib/options/options.ts"
-import { memoryStore } from "#lib/stores/memory/memory-store.ts"
+import { InvalidOptionError } from "#lib/options/index.ts"
+import { memoryStore } from "#lib/stores/memory/index.ts"
 import { failingStore, recordingStore, silentStore } from "./stores.ts"
 
 const threePerMinute = fixedWindow({ limit: 3, window: 60_000 })

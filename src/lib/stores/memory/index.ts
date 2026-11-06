@@ -1,6 +1,6 @@
-import type { Store } from "#lib/store/store.ts"
+import type { Store } from "#lib/store/index.ts"
 import type { State } from "#lib/transitions/index.ts"
-import { expiringMap } from "#lib/expiring-map/expiring-map.ts"
+import { expiringMap } from "#lib/expiring-map/index.ts"
 import { transition } from "#lib/transitions/index.ts"
 
 export type MemoryStoreOptions = {

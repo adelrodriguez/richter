@@ -1,8 +1,8 @@
 import { describe, test } from "vitest"
-import { fixedWindow } from "#lib/algorithms/algorithms.ts"
+import { fixedWindow } from "#lib/algorithms/index.ts"
 import { buildLimiter } from "#lib/limiter/build-limiter.ts"
 import { rateLimit } from "#lib/limiter/rate-limit.ts"
-import { memoryStore } from "#lib/stores/memory/memory-store.ts"
+import { memoryStore } from "#lib/stores/memory/index.ts"
 
 // The cost of the limiter on top of its store. The memory store makes no network calls, so the
 // difference between the two is the limiter's own work.

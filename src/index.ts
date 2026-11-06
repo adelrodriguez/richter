@@ -5,8 +5,8 @@ export type {
   TokenBucket,
   TokenBucketOptions,
   WindowOptions,
-} from "#lib/algorithms/algorithms.ts"
-export { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
+} from "#lib/algorithms/index.ts"
+export { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/index.ts"
 export type {
   AllowedResult,
   BuildLimiterOptions,
@@ -27,5 +27,5 @@ export type { Identity } from "#lib/limiter/identity.ts"
 export type { LimitResults, RateLimitOptions } from "#lib/limiter/rate-limit.ts"
 export { clear, rateLimit, remaining } from "#lib/limiter/rate-limit.ts"
 export { StoreError, StoreTimeoutError } from "#lib/limiter/errors.ts"
-export { InvalidOptionError } from "#lib/options/options.ts"
-export type { Store, StoreRequest, StoreResult } from "#lib/store/store.ts"
+export { InvalidOptionError } from "#lib/options/index.ts"
+export type { Store, StoreRequest, StoreResult } from "#lib/store/index.ts"

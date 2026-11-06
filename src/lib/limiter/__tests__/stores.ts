@@ -1,5 +1,5 @@
-import type { Store, StoreRequest } from "#lib/store/store.ts"
-import { memoryStore } from "#lib/stores/memory/memory-store.ts"
+import type { Store, StoreRequest } from "#lib/store/index.ts"
+import { memoryStore } from "#lib/stores/memory/index.ts"
 
 // The stores that the limiter tests share.
 

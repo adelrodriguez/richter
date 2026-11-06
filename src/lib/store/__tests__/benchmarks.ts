@@ -1,7 +1,7 @@
 import { test } from "vitest"
-import type { Algorithm } from "#lib/algorithms/algorithms.ts"
-import type { Store } from "#lib/store/store.ts"
-import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
+import type { Algorithm } from "#lib/algorithms/index.ts"
+import type { Store } from "#lib/store/index.ts"
+import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/index.ts"
 
 // The benchmarks every store runs. Run them with `vitest bench`.
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
-import { InvalidOptionError } from "#lib/options/options.ts"
+import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/index.ts"
+import { InvalidOptionError } from "#lib/options/index.ts"
 
-// The longest period every store can expire state for. See `MAX_PERIOD` in algorithms.ts.
+// The longest period every store can expire state for. See `MAX_PERIOD` in `src/lib/algorithms/index.ts`.
 const longest = 2 ** 50
 
 describe("algorithms", () => {

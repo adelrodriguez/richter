@@ -1,5 +1,5 @@
-import type { Algorithm } from "#lib/algorithms/algorithms.ts"
-import type { Store, StoreResult } from "#lib/store/store.ts"
+import type { Algorithm } from "#lib/algorithms/index.ts"
+import type { Store, StoreResult } from "#lib/store/index.ts"
 import { readScript } from "./scripts.macro.ts" with { type: "macro" }
 
 /**
