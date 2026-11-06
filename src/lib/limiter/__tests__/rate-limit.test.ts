@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest"
 import type { Limiter } from "#lib/limiter/build-limiter.ts"
-import type { Store, StoreRequest } from "#lib/store/store.ts"
-import { fixedWindow } from "#lib/algorithms/algorithms.ts"
+import type { Store, StoreRequest } from "#lib/store/index.ts"
+import { fixedWindow } from "#lib/algorithms/index.ts"
 import { buildLimiter } from "#lib/limiter/build-limiter.ts"
 import { StoreError } from "#lib/limiter/errors.ts"
 import { headers } from "#lib/limiter/headers.ts"
 import { clear, rateLimit, remaining } from "#lib/limiter/rate-limit.ts"
-import { InvalidOptionError } from "#lib/options/options.ts"
-import { memoryStore } from "#lib/stores/memory/memory-store.ts"
+import { InvalidOptionError } from "#lib/options/index.ts"
+import { memoryStore } from "#lib/stores/memory/index.ts"
 import { failingStore, recordingStore } from "./stores.ts"
 
 type Chain = readonly [Limiter, Limiter]

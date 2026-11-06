@@ -1,10 +1,5 @@
-import type {
-  Algorithm,
-  FixedWindow,
-  SlidingWindow,
-  TokenBucket,
-} from "#lib/algorithms/algorithms.ts"
-import type { StoreResult } from "#lib/store/store.ts"
+import type { Algorithm, FixedWindow, SlidingWindow, TokenBucket } from "#lib/algorithms/index.ts"
+import type { StoreResult } from "#lib/store/index.ts"
 
 type FixedWindowState = {
   readonly type: "fixedWindow"

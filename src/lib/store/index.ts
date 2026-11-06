@@ -1,4 +1,4 @@
-import type { Algorithm } from "#lib/algorithms/algorithms.ts"
+import type { Algorithm } from "#lib/algorithms/index.ts"
 
 export type StoreRequest<Supported extends Algorithm = Algorithm> = {
   readonly key: string

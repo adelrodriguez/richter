@@ -1,4 +1,4 @@
-import type { Store } from "#lib/store/store.ts"
+import type { Store } from "#lib/store/index.ts"
 import { scriptStore } from "./script-store.ts"
 
 /**

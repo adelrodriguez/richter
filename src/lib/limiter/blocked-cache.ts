@@ -1,5 +1,5 @@
-import type { StoreResult } from "#lib/store/store.ts"
-import { expiringMap } from "#lib/expiring-map/expiring-map.ts"
+import type { StoreResult } from "#lib/store/index.ts"
+import { expiringMap } from "#lib/expiring-map/index.ts"
 
 type Block = {
   readonly cost: number

@@ -1,4 +1,4 @@
-import { InvalidOptionError, positiveInteger } from "#lib/options/options.ts"
+import { InvalidOptionError, positiveInteger } from "#lib/options/index.ts"
 
 // Every store sets an expiry up to two periods after now, and computes it in floating point. A
 // period of at most 2^50 ms (about 35,000 years) keeps that time a safe integer for every date

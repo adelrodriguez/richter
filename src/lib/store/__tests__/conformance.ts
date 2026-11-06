@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import type { Algorithm } from "#lib/algorithms/algorithms.ts"
-import type { Store, StoreResult } from "#lib/store/store.ts"
-import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
+import type { Algorithm } from "#lib/algorithms/index.ts"
+import type { Store, StoreResult } from "#lib/store/index.ts"
+import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/index.ts"
 
 // The behaviour every store must have. These tests use the store's real clock, so they use short
 // windows and wait for the times the store reports.

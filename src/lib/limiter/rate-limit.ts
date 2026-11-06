@@ -1,4 +1,4 @@
-import { InvalidOptionError } from "#lib/options/options.ts"
+import { InvalidOptionError } from "#lib/options/index.ts"
 import type { AllowedResult, LimitResult, Limiter, Remaining } from "./build-limiter.ts"
 import { internal } from "./build-limiter.ts"
 

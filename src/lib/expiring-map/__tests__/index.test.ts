@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { expiringMap } from "#lib/expiring-map/expiring-map.ts"
+import { expiringMap } from "#lib/expiring-map/index.ts"
 
 describe("expiringMap", () => {
   it("hides an entry from its expiry time", () => {

@@ -1,8 +1,8 @@
 import { Redis } from "ioredis"
 import { afterAll, describe, expect, it } from "vitest"
 import type { ScriptCommands } from "#lib/stores/redis/script-store.ts"
-import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/algorithms.ts"
-import { memoryStore } from "#lib/stores/memory/memory-store.ts"
+import { fixedWindow, slidingWindow, tokenBucket } from "#lib/algorithms/index.ts"
+import { memoryStore } from "#lib/stores/memory/index.ts"
 import { InvalidReplyError, scriptStore } from "#lib/stores/redis/script-store.ts"
 import { testScriptReload, url } from "./server.ts"
 
