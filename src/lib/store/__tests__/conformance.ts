@@ -38,7 +38,7 @@ export function testStore(createStore: () => Store) {
     fixedWindow: fixedWindow({ limit: 5, window: 2000 }),
     slidingWindow: slidingWindow({ limit: 5, window: 2000 }),
     tokenBucket: tokenBucket({ capacity: 5, interval: 2000, refillRate: 1 }),
-  }
+  } satisfies Record<Algorithm["type"], Algorithm>
 
   describe.each(Object.values(algorithms))("$type", (algorithm) => {
     it("allows exactly the capacity when requests arrive together", async () => {

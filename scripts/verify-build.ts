@@ -6,19 +6,15 @@ import packageJson from "../package.json" with { type: "json" }
 
 const packageRoot = join(import.meta.dirname, "..")
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "richter-build-"))
+const targets = Object.values(packageJson.exports)
 const exportPaths = [
   packageJson.module,
   packageJson.types,
-  packageJson.exports["."].import,
-  packageJson.exports["./stores/memory"].import,
-  packageJson.exports["./stores/memory"].types,
-  packageJson.exports["./stores/bun-redis"].import,
-  packageJson.exports["./stores/bun-redis"].types,
-  packageJson.exports["./stores/redis"].import,
-  packageJson.exports["./stores/redis"].types,
-  packageJson.exports["./stores/valkey"].import,
-  packageJson.exports["./stores/valkey"].types,
+  ...targets.flatMap((target) => Object.values(target)),
 ]
+const specifiers = Object.keys(packageJson.exports).map(
+  (subpath) => `${packageJson.name}${subpath.slice(1)}`
+)
 
 function run(command: string, arguments_: string[], cwd: string) {
   execFileSync(command, arguments_, { cwd, stdio: "inherit" })
@@ -30,6 +26,16 @@ try {
     if (!existsSync(resolvedPath)) {
       throw new Error(`The package export does not exist: ${exportPath}`)
     }
+  }
+
+  // `tsdown.config.ts` builds every file in `src/stores/`, so each built store needs an export.
+  const exported = new Set(targets.map((target) => target.import))
+  const unexported = readdirSync(join(packageRoot, "dist/stores"))
+    .filter((file) => file.endsWith(".js"))
+    .map((file) => `./dist/stores/${file}`)
+    .filter((path) => !exported.has(path))
+  if (unexported.length > 0) {
+    throw new Error(`These built entries have no package export: ${unexported.join(", ")}`)
   }
 
   run("pnpm", ["pack", "--pack-destination", temporaryDirectory], packageRoot)
@@ -53,9 +59,6 @@ try {
 
 import { buildLimiter, fixedWindow, InvalidOptionError, rateLimit } from "richter"
 import { memoryStore } from "richter/stores/memory"
-import { bunRedisStore } from "richter/stores/bun-redis"
-import { redisStore } from "richter/stores/redis"
-import { valkeyStore } from "richter/stores/valkey"
 
 const limiter = buildLimiter({ store: memoryStore() })
 const perKey = limiter({ algorithm: fixedWindow({ limit: 1, window: 60_000 }), name: "key" })
@@ -63,9 +66,11 @@ const perKey = limiter({ algorithm: fixedWindow({ limit: 1, window: 60_000 }), n
 assert.equal((await rateLimit(perKey, "a")).success, true)
 assert.equal((await rateLimit(perKey, "a")).success, false)
 assert.throws(() => fixedWindow({ limit: 0, window: 1 }), InvalidOptionError)
-assert.equal(typeof bunRedisStore, "function")
-assert.equal(typeof redisStore, "function")
-assert.equal(typeof valkeyStore, "function")
+
+for (const specifier of ${JSON.stringify(specifiers)}) {
+  const entry = await import(specifier)
+  assert.notEqual(Object.keys(entry).length, 0, \`\${specifier} exports nothing\`)
+}
 `
   )
   run(process.execPath, ["runtime.mjs"], temporaryDirectory)

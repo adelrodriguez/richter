@@ -4,13 +4,8 @@ import { Macros } from "unplugin-macros"
 export default defineConfig({
   clean: true,
   dts: true,
-  entry: {
-    index: "src/index.ts",
-    "stores/bun-redis": "src/stores/bun-redis.ts",
-    "stores/memory": "src/stores/memory.ts",
-    "stores/redis": "src/stores/redis.ts",
-    "stores/valkey": "src/stores/valkey.ts",
-  },
+  // `scripts/verify-build.ts` fails when a built store has no export in `package.json`.
+  entry: ["src/index.ts", "src/stores/*.ts"],
   fixedExtension: false,
   minify: true,
   outDir: "dist",
