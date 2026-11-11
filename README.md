@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> `richter` has moved to [`@sanely/ratelimit`](https://www.npmjs.com/package/@sanely/ratelimit). Its code now lives in [adelrodriguez/sanely](https://github.com/adelrodriguez/sanely/tree/main/packages/ratelimit). This repository is archived, and `richter` is deprecated on npm.
+
 <div align="center">
   <h1 align="center">✋🏻 <code>richter</code></h1>
 
